@@ -1,0 +1,36 @@
+services:
+  # ── Pakhi CLI ─────────────────────────────────────────────────────────
+  pakhi:
+    build: .
+    image: pakhi:latest
+    container_name: pakhi
+    entrypoint: ["pakhi"]
+    command: ["--help"]
+    volumes:
+      - pakhi-data:/home/pakhi/data
+      - ./examples:/home/pakhi/examples:ro
+    environment:
+      - PAKHI_HOME=/home/pakhi
+    restart: "no"
+
+  # ── Pakhi Dashboard (long-running) ────────────────────────────────────
+  dashboard:
+    build: .
+    image: pakhi:latest
+    container_name: pakhi-dashboard
+    entrypoint: ["pakhi"]
+    command: ["status"]
+    volumes:
+      - pakhi-data:/home/pakhi/data
+    environment:
+      - PAKHI_HOME=/home/pakhi
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pakhi", "--version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pakhi-data:
+    driver: local

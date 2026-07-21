@@ -1,0 +1,46 @@
+# Version control
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation source
+docs/
+notebooks/
+*.md
+!README.md
+
+# Data (large files)
+data/cache/
+data/sample/*.grib
+data/sample/*.nc
+data/sample/*.zarr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*

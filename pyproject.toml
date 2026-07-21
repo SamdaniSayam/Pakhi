@@ -1,0 +1,161 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pakhi"
+version = "1.0.0"
+description = "Weather intelligence and quantitative trading platform — birds sense storms before humans do."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "TripleS Studio" }]
+requires-python = ">=3.10"
+keywords = [
+    "weather", "forecast", "quantitative-trading", "commodities",
+    "energy", "machine-learning", "climate", "meteorology",
+    "orange-juice", "natural-gas", "power-grid", "hurricane",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "numpy>=1.24",
+    "xarray>=2023.1",
+    "dask[dataframe]>=2023.1",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "requests>=2.28",
+    "click>=8.0",
+    "rich>=13.0",
+    "triples-sigfast>=2.2.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "lightgbm>=4.0",
+    "torch>=2.0",
+    "gpytorch>=1.10",
+]
+trading = [
+    "yfinance>=0.2",
+]
+viz = [
+    "matplotlib>=3.7",
+    "cartopy>=0.22",
+    "plotext>=5.2",
+    "plotly>=5.15",
+]
+io = [
+    "cfgrib>=0.9.12",
+    "netCDF4>=1.6",
+    "zarr>=2.14",
+    "numba>=0.57",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+    "pre-commit>=3.0",
+]
+all = [
+    "pakhi[ml,trading,viz,io,dev]",
+]
+
+[project.scripts]
+pakhi = "pakhi.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SamdaniSayam/pakhi"
+Documentation = "https://github.com/SamdaniSayam/pakhi#readme"
+Repository = "https://github.com/SamdaniSayam/pakhi"
+"Bug Tracker" = "https://github.com/SamdaniSayam/pakhi/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pakhi*"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["pakhi", "tests", "examples"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # function call in default argument (click decorators)
+    "B904",   # raise ... from err (viz imports)
+    "SIM108", # ternary operator (readability tradeoff)
+    "UP007",  # X | Y union syntax (3.10 compat)
+    "UP035",  # deprecated typing imports (3.10 compat)
+    "UP045",  # Optional[X] → X | None
+    "N806",   # uppercase variable names (domain standard: X, B, LSTM, etc.)
+    "N803",   # uppercase argument names (domain standard: X, X_val, X_train)
+    "TC002",  # move imports to TYPE_CHECKING block
+    "TC003",  # move stdlib imports to TYPE_CHECKING
+    "RUF002", # ambiguous unicode in docstrings (en-dashes, Greek letters)
+    "RUF001", # ambiguous unicode in strings
+    "RUF003", # ambiguous unicode in comments
+    "RUF012", # mutable class attribute (false positive on __all__)
+    "RUF034", # useless if-else (examples)
+    "B905",   # zip() strict= parameter
+    "RUF043", # regex pattern in match= (tests)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pakhi"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# ── Pytest ────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short --strict-markers -x"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "network: marks tests requiring network access",
+]
+
+# ── Coverage ──────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["pakhi"]
+omit = ["pakhi/cli.py", "*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]

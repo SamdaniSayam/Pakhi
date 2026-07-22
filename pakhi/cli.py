@@ -100,6 +100,54 @@ def _exit_error(msg: str, code: int = 1) -> None:
     sys.exit(code)
 
 
+def _geocode(location: str) -> tuple[float, float]:
+    """Convert a location name to (lat, lon) using Open-Meteo geocoding API.
+
+    Supports city names ("New York"), coordinates ("40.7,-74.0"), or ISO codes.
+    Falls back to Central Florida (28.5, -81.5) if geocoding fails.
+    """
+    # Check if already coordinates
+    if "," in location:
+        try:
+            parts = location.split(",")
+            return float(parts[0].strip()), float(parts[1].strip())
+        except (ValueError, IndexError):
+            pass
+
+    try:
+        import requests as _requests
+
+        resp = _requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": location, "count": 1, "language": "en"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        if results:
+            return results[0]["latitude"], results[0]["longitude"]
+    except Exception:
+        pass
+
+    # Fallback: Central Florida (OJ country)
+    return 28.5, -81.5
+
+
+def _resolve_hourly_variable(variable: str) -> str:
+    """Map a user-friendly variable name to an Open-Meteo hourly variable."""
+    mapping = {
+        "temperature_2m": "temperature_2m",
+        "wind_10m": "wind_speed_10m",
+        "wind_speed": "wind_speed_10m",
+        "precipitation": "precipitation",
+        "precipitation_probability": "precipitation_probability",
+        "humidity": "relative_humidity_2m",
+        "pressure": "surface_pressure",
+        "cloud_cover": "cloud_cover",
+    }
+    return mapping.get(variable, variable)
+
+
 # ── CLI group ─────────────────────────────────────────────────────────────
 
 
@@ -176,11 +224,13 @@ def forecast(
     data = None
     try:
         with _spinner("Connecting to Open-Meteo") as progress:
-            progress.add_task("fetch", description=f"Fetching {days}-day forecast for {location}")
+            progress.add_task(f"Fetching {days}-day forecast for {location}")
             from pakhi.src.openmeteo import OpenMeteoConnector
 
-            connector = OpenMeteoConnector(variables=[variable])
-            data = connector.fetch(location=location, days=days)
+            lat, lon = _geocode(location)
+            connector = OpenMeteoConnector()
+            hourly_var = _resolve_hourly_variable(variable)
+            data = connector.forecast(lat=lat, lon=lon, days=days, hourly=[hourly_var])
     except Exception as exc:
         if not quiet:
             _print(
@@ -403,8 +453,12 @@ def _evaluate_signal(instrument: str) -> tuple[str, float, str]:
     try:
         from pakhi.src.openmeteo import OpenMeteoConnector
 
-        connector = OpenMeteoConnector(variables=["temperature_2m", "wind_10m", "surface_pressure"])
-        connector.fetch(location="global", days=1)
+        connector = OpenMeteoConnector()
+        # Fetch current conditions for a relevant region
+        lat, lon = {"OJ_FUTURES": (28.5, -81.5), "NG_FUTURES": (31.0, -96.0),
+                     "ERCOT_FUTURES": (31.0, -96.0)}.get(instrument, (40.7, -74.0))
+        connector.forecast(lat=lat, lon=lon, days=1,
+                          hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"])
         return ("LONG", 0.60, "Based on live weather data analysis.")
     except Exception:
         pass
@@ -456,8 +510,9 @@ def status(ctx: click.Context) -> None:
     try:
         from pakhi.src.openmeteo import OpenMeteoConnector
 
-        connector = OpenMeteoConnector(variables=["temperature_2m", "wind_10m", "surface_pressure"])
-        connector.fetch(location="New York", days=1)
+        connector = OpenMeteoConnector()
+        connector.forecast(lat=40.7, lon=-74.0, days=1,
+                          hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"])
     except Exception:
         weather_data["description"] = "Partly cloudy (sample)"
 
@@ -605,7 +660,7 @@ def backtest(
     progress_desc = f"Backtesting {instrument}"
     with _spinner(progress_desc) as progress:
         task = (
-            progress.add_task("backtest", total=n_days - 1, description=progress_desc)
+            progress.add_task(progress_desc, total=n_days - 1)
             if _HAS_RICH
             else None
         )
@@ -663,7 +718,7 @@ def backtest(
         "period": {"start": start, "end": end, "days": n_days},
         "initial_capital": initial_capital,
         "final_equity": round(result.equity_curve[-1], 2)
-        if result.equity_curve
+        if len(result.equity_curve) > 0
         else initial_capital,
         "total_return": round(result.total_return, 4),
         "sharpe_ratio": round(result.sharpe, 2),
@@ -697,7 +752,7 @@ def backtest(
         table.add_row("Total Trades", f"{len(trade_log)}")
         table.add_row("Initial Capital", f"${initial_capital:,.0f}")
         table.add_row(
-            "Final Equity", f"${result.equity_curve[-1]:,.0f}" if result.equity_curve else "—"
+            "Final Equity", f"${result.equity_curve[-1]:,.0f}" if len(result.equity_curve) > 0 else "—"
         )
         console.print(table)
     else:
@@ -714,7 +769,7 @@ def backtest(
         print(f"  Initial Capital: ${initial_capital:,.0f}")
         print(
             f"  Final Equity  : ${result.equity_curve[-1]:,.0f}"
-            if result.equity_curve
+            if len(result.equity_curve) > 0
             else "  Final Equity  : —"
         )
 

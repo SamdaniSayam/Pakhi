@@ -7,7 +7,7 @@ name = "pakhi"
 version = "1.0.0"
 description = "Weather intelligence and quantitative trading platform — birds sense storms before humans do."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "TripleS Studio" }]
 requires-python = ">=3.10"
 keywords = [
@@ -19,7 +19,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

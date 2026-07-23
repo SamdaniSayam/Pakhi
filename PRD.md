@@ -1014,7 +1014,96 @@ Real-time operational flow (every 6 hours):
 
 ---
 
-## 9. Open Questions
+## 9. Competitive Landscape
+
+### Existing Solutions
+
+Pakhi is not the first platform to connect weather data to financial markets.
+Understanding the competitive landscape is essential for positioning:
+
+**Commercial Platforms:**
+- **Jua (EPT-2):** Live and purpose-built for energy trading. Benchmarked against
+  ECMWF, Microsoft Aurora, and GraphCast. Includes an agent that turns forecasts
+  into trader briefings. Jua is a funded startup with significant resources.
+- **Tomorrow.io:** Commercial weather intelligence platform with API access.
+  Focuses on enterprise customers, not open-source.
+- **Climavision:** Hyper-local weather radar network with forecasting services.
+
+**Open-Source Projects:**
+- **WeatherBench:** Google's benchmark for weather forecasting models. Academic
+  focus, not designed for trading.
+- **OpenWeather:** Free weather API, but no signal generation or trading tools.
+- **Various weather trading bots:** Open-source projects that trade GFS ensemble
+  weather signals with Kelly-criterion sizing on prediction markets (Kalshi,
+  Polymarket). These are hobbyist projects, not production platforms.
+
+**What Makes Pakhi Different:**
+1. **End-to-end pipeline:** From raw meteorological data → features → signals →
+   backtesting. Most competitors focus on one piece.
+2. **Domain-specific signals:** Freeze detection, hurricane RI, drought, heat
+   waves — not generic "weather API."
+3. **Open-source core:** The full platform is open-source, not just an API.
+4. **Built on triples-sigfast:** Leverages existing signal processing infrastructure.
+
+**Honest Assessment:**
+- The forecasting layer competes with funded labs (Jua, DeepMind, Microsoft)
+  that have more resources and data.
+- The signal layer's edge mostly evaporates once it's public — anyone can read
+  the signal code and front-run it.
+- Pakhi's sustainable value is "excellent open tooling" for weather-quant
+  research, not "proprietary alpha."
+
+### Positioning
+
+Pakhi should position itself as:
+- **Research tool:** For quant researchers exploring weather-driven strategies.
+- **Educational platform:** Teaching meteorology + finance integration.
+- **Open infrastructure:** Like pandas for weather-quant, not a hedge fund.
+
+---
+
+## 10. Regulatory & Legal Considerations
+
+### CFTC/CTA Registration
+
+**Critical Warning:** Selling live trading signals or managing money based on
+weather forecasts may trigger regulatory requirements in the United States:
+
+- **Commodity Trading Advisor (CTA):** If Pakhi provides trading recommendations
+  for commodity futures, it may need to register with the CFTC and NFA.
+- **Commodity Pool Operator (CPO):** If Pakhi pools investor funds for trading,
+  CPO registration is required.
+- **Investment Adviser:** State or federal registration may be required depending
+  on AUM and client type.
+
+**Recommendation:** Before offering live signals for money, consult a commodities
+regulatory attorney. The cost of non-compliance can be severe.
+
+### Disclaimers
+
+Pakhi is provided for **educational and research purposes only**. It is not:
+- Investment advice
+- A recommendation to buy or sell any security
+- A guarantee of future performance
+- A substitute for professional financial advice
+
+**Past performance on synthetic data does not indicate future results.** All
+backtests shown in examples use synthetic data designed to illustrate the
+platform's capabilities. Real-world performance will differ significantly.
+
+### Data Licensing
+
+- **ERA5:** Public domain (Copernicus/C3S). Free to use.
+- **NOAA GFS/GEFS:** Public domain (US government). Free to use.
+- **GOES satellite:** Public domain (NOAA). Free to use.
+- **Yahoo Finance:** Subject to Yahoo's Terms of Service. Not for commercial
+  redistribution.
+- **Interactive Brokers:** Subject to IB's API Agreement. Not for redistribution
+  of market data.
+
+---
+
+## 11. Open Questions
 
 1. **ERA5 access:** CDS API requires registration. Should we bundle a sample
    dataset for quickstart, or require users to register?

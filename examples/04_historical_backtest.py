@@ -151,16 +151,24 @@ base_price = 120.0  # cents/lb
 drift = 0.0001  # slight upward drift
 returns = np.random.normal(drift, 0.015, n_days)  # base volatility
 
-# Add spikes when freeze probability is high
+# Add spikes when freeze probability is high (with realistic noise)
+np.random.seed(2022)
 for i in range(1, n_days):
     if freeze_prob[i] > 0.5:
-        # OJ spikes 5-25% within a few days of freeze
-        spike_magnitude = freeze_prob[i] * 0.15
-        returns[i] += spike_magnitude
+        # OJ reaction to freeze: noisy, sometimes positive, sometimes negative
+        # Market may have already priced in the freeze, or the event may not materialize
+        signal_strength = freeze_prob[i]
+        # Base reaction: 5-15% spike, but with significant noise
+        base_spike = signal_strength * np.random.uniform(0.05, 0.15)
+        # Sometimes the market reacts negatively (false alarm, or event already priced in)
+        if np.random.random() < 0.3:  # 30% chance of negative reaction
+            base_spike = -base_spike * 0.5
+        returns[i] += base_spike
+        # Lingering effect (decays over 2-3 days)
         if i + 1 < n_days:
-            returns[i + 1] += spike_magnitude * 0.5
+            returns[i + 1] += base_spike * 0.3 * np.random.uniform(0.5, 1.5)
         if i + 2 < n_days:
-            returns[i + 2] += spike_magnitude * 0.2
+            returns[i + 2] += base_spike * 0.1 * np.random.uniform(0.3, 1.0)
 
 prices = base_price * np.cumprod(1 + returns)
 

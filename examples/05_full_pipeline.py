@@ -75,10 +75,13 @@ base_time = datetime(2022, 1, 1)
 days = np.arange(n_days)
 doy = np.array([(base_time + timedelta(days=int(d))).timetuple().tm_yday for d in days])
 
-# Temperature: seasonal cycle + trends + noise
-temp_mean = 22.0 + 8.0 * np.sin(2 * np.pi * (doy - 80) / 365) + np.random.normal(0, 2, n_days)
-temp_max = temp_mean + np.random.uniform(3, 7, n_days)
-temp_min = temp_mean - np.random.uniform(2, 5, n_days)
+# Temperature: seasonal cycle + trends + noise (with significant weather noise)
+# Random walk component captures weather regime changes (not predictable from lags)
+random_walk = np.cumsum(np.random.normal(0, 0.5, n_days))
+temp_mean = 22.0 + 8.0 * np.sin(2 * np.pi * (doy - 80) / 365) + random_walk + np.random.normal(0, 2, n_days)
+# temp_max/min have independent measurement noise, not deterministic from temp_mean
+temp_max = temp_mean + np.random.uniform(3, 7, n_days) + np.random.normal(0, 1.5, n_days)
+temp_min = temp_mean - np.random.uniform(2, 5, n_days) + np.random.normal(0, 1.5, n_days)
 
 # Inject winter cold snaps (Florida freeze events in Jan/Feb)
 for yr_offset in [0, 1]:
@@ -167,10 +170,10 @@ for lag in [1, 3, 7, 14]:
     df[f"oj_lag_{lag}"] = df["oj_close"].shift(lag)
     df[f"temp_lag_{lag}"] = df["temp_mean"].shift(lag)
 
-# Rolling statistics
-df["temp_roll7_mean"] = df["temp_mean"].rolling(7, min_periods=1).mean()
-df["temp_roll7_std"] = df["temp_mean"].rolling(7, min_periods=2).std()
-df["cdd_roll7_sum"] = df["cdd"].rolling(7, min_periods=1).sum()
+# Rolling statistics (shifted by 1 to avoid lookahead — only use past data)
+df["temp_roll7_mean"] = df["temp_mean"].shift(1).rolling(7, min_periods=1).mean()
+df["temp_roll7_std"] = df["temp_mean"].shift(1).rolling(7, min_periods=2).std()
+df["cdd_roll7_sum"] = df["cdd"].shift(1).rolling(7, min_periods=1).sum()
 
 # Freeze probability (ensemble-like: use temp_min distribution)
 df["freeze_prob_3d"] = (
@@ -180,19 +183,15 @@ df["freeze_prob_3d"] = (
 df = df.dropna()
 
 feature_cols = [
-    "temp_mean",
     "temp_max",
     "temp_min",
     "wind_speed",
     "humidity",
-    "hdd",
-    "cdd",
     "diurnal_range",
     "heat_index",
     "wind_chill_vals",
     "temp_roll7_mean",
     "temp_roll7_std",
-    "cdd_roll7_sum",
     "freeze_prob_3d",
     "oj_lag_1",
     "oj_lag_3",
@@ -236,7 +235,35 @@ scaler = StandardScaler()
 X_train_s = scaler.fit_transform(X_train)
 X_test_s = scaler.transform(X_test)
 
-# Persistence baseline
+# Simple linear regression baseline (has actual predictive skill)
+from sklearn.linear_model import LinearRegression
+
+
+class LinearRegressionWrapper:
+    """Wrapper for sklearn LinearRegression to match pakhi model interface."""
+
+    def __init__(self, model: LinearRegression):
+        self.model = model
+
+    def predict(self, X: np.ndarray) -> "ForecastResult":
+        from pakhi.models.base import ForecastResult
+
+        preds = self.model.predict(X)
+        return ForecastResult(
+            deterministic=preds.reshape(-1, 1),
+            quantiles={},
+            skill_scores={},
+            metadata={"model": "linear_regression"},
+        )
+
+
+lr_model = LinearRegression()
+lr_model.fit(X_train_s, y_train)
+lr_wrapper = LinearRegressionWrapper(lr_model)
+lr_result = lr_wrapper.predict(X_test_s)
+lr_metrics = compute_metrics(y_test, lr_result.deterministic.ravel())
+
+# Persistence baseline for comparison
 persistence = PersistenceModel()
 persistence.fit(X_train_s, y_train)
 persist_result = persistence.predict(X_test_s)
@@ -247,6 +274,9 @@ print(f"  Target           : {target_col} (°C)")
 print(f"  Persistence RMSE : {persist_metrics['rmse']:.2f}°C")
 print(f"  Persistence MAE  : {persist_metrics['mae']:.2f}°C")
 print(f"  Persistence ACC  : {persist_metrics['acc']:.4f}")
+print(f"  LinearReg RMSE   : {lr_metrics['rmse']:.2f}°C")
+print(f"  LinearReg MAE    : {lr_metrics['mae']:.2f}°C")
+print(f"  LinearReg ACC    : {lr_metrics['acc']:.4f}")
 
 # Try ML model
 ml_available = False
@@ -279,13 +309,13 @@ try:
     best_model = ml_model
     best_metrics = ml_metrics
 except ImportError:
-    print("\n  (GradientForecaster unavailable, using persistence)")
-    best_model = persistence
-    best_metrics = persist_metrics
+    print("\n  (GradientForecaster unavailable, using LinearRegression)")
+    best_model = lr_wrapper
+    best_metrics = lr_metrics
 except Exception as e:
-    print(f"\n  (ML model failed: {e}, using persistence)")
-    best_model = persistence
-    best_metrics = persist_metrics
+    print(f"\n  (ML model failed: {e}, using LinearRegression)")
+    best_model = lr_wrapper
+    best_metrics = lr_metrics
 
 # ══════════════════════════════════════════════════════════════════════
 #  STEP 4: PREDICTION

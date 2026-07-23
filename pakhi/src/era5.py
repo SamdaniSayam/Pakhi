@@ -1,15 +1,18 @@
-"""ERA5 reanalysis data connector via the Copernicus CDS API.
+"""ERA5 reanalysis data connector via the Copernicus CDS API or Google Zarr.
 
 Downloads ERA5 single-level and pressure-level data, supports lazy
 Dask loading for large date ranges, and returns xarray Datasets.
 
-Requires a CDS API key — register at https://cds.climate.copernicus.eu
-and store credentials in ~/.cdsapirc.
+Two data sources are supported:
+1. CDS API (requires API key) — traditional download method
+2. Google Cloud Zarr mirror — cloud-optimized, no API key needed
 
 Example:
     >>> from pakhi.src.era5 import ERA5Connector
     >>> era5 = ERA5Connector(variables=["temperature_2m", "msl"])
     >>> ds = era5.fetch(start="2020-01-01", end="2020-12-31")
+    >>> # Or use Google Zarr (no API key needed):
+    >>> ds = era5.fetch_zarr(start="2020-01-01", end="2020-12-31")
 """
 
 from __future__ import annotations
@@ -341,6 +344,95 @@ class ERA5Connector:
 
         end_dt = datetime.strptime(end, "%Y-%m-%d") - timedelta(days=1)
         return self.fetch(start, end_dt.strftime("%Y-%m-%d"), chunks=chunks)
+
+    def fetch_zarr(
+        self,
+        start: str,
+        end: str,
+        variables: list[str] | None = None,
+    ) -> xr.Dataset:
+        """Fetch ERA5 data from Google's cloud-optimized Zarr mirror.
+
+        This method does NOT require a CDS API key. Data is streamed
+        directly from Google Cloud Storage.
+
+        Args:
+            start: Start date "YYYY-MM-DD".
+            end: End date "YYYY-MM-DD".
+            variables: Override variable list. If None, uses self.variables.
+
+        Returns:
+            xarray.Dataset with ERA5 data.
+
+        Raises:
+            ImportError: If zarr or gcsfs packages are not installed.
+        """
+        try:
+            import zarr
+            import gcsfs
+        except ImportError as exc:
+            raise ImportError(
+                "zarr and gcsfs are required for Google Zarr access. "
+                "Install with: pip install zarr gcsfs"
+            ) from exc
+
+        # Google Zarr ERA5 dataset
+        # https://console.cloud.google.com/storage/browser/gcp-public-data-era5
+        bucket = "gcp-public-data-era5"
+        zarr_path = f"gs://{bucket}/era5/"
+
+        # Map variable names to Zarr store paths
+        var_mapping = {
+            "temperature_2m": "era5/single_level/surface/temperature",
+            "msl": "era5/single_level/surface/mean_sea_level_pressure",
+            "wind_10m_u": "era5/single_level/surface/u_component_of_wind",
+            "wind_10m_v": "era5/single_level/surface/v_component_of_wind",
+            "wind_speed_10m": "era5/single_level/surface/wind_speed",
+            "precipitation": "era5/single_level/surface/precipitation",
+            "specific_humidity": "era5/single_level/surface/specific_humidity",
+            "cloud_cover": "era5/single_level/surface/cloud_cover",
+            "surface_pressure": "era5/single_level/surface/surface_pressure",
+            "soil_temperature_1": "era5/single_level/surface/soil_temperature_level_1",
+            "snow_depth": "era5/single_level/surface/snow_depth",
+            "visibility": "era5/single_level/surface/visibility",
+        }
+
+        if variables is None:
+            variables = self.variables
+
+        # Filter to available variables
+        available_vars = [v for v in variables if v in var_mapping]
+        if not available_vars:
+            raise ValueError(
+                f"No variables available in Google Zarr mirror. "
+                f"Available: {sorted(var_mapping.keys())}"
+            )
+
+        # Load data from Zarr stores
+        datasets: list[xr.Dataset] = []
+        for var in available_vars:
+            store_path = var_mapping[var]
+            try:
+                store = zarr.storage.GCSStore(store_path)
+                ds = xr.open_zarr(store, consolidated=True)
+
+                # Slice by time
+                ds = ds.sel(time=slice(start, end))
+                datasets.append(ds)
+            except Exception as exc:
+                logger.warning("Failed to load %s from Zarr: %s", var, exc)
+                continue
+
+        if not datasets:
+            raise RuntimeError(
+                f"No data fetched from Google Zarr. "
+                f"Check variable names and date range."
+            )
+
+        # Merge datasets
+        if len(datasets) == 1:
+            return datasets[0]
+        return xr.merge(datasets, compat="override")
 
     def close(self) -> None:
         """Release CDS client resources."""

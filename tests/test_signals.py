@@ -81,10 +81,10 @@ class TestPositionSize:
 
     def test_confidence_method(self):
         size = position_size(0.7, method="confidence", max_size=0.25)
-        assert size == pytest.approx(0.25)
+        assert size == pytest.approx(0.175)
 
     def test_confidence_capped(self):
-        size = position_size(0.3, method="confidence", max_size=0.25)
+        size = position_size(1.0, method="confidence", max_size=0.25)
         assert size == pytest.approx(0.25)
 
     def test_unknown_method_raises(self):

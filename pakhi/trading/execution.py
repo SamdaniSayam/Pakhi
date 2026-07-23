@@ -237,11 +237,11 @@ class PaperTrader:
             pnl = (trade.entry_price - exit_price) * trade.quantity
 
         trade.exit_price = exit_price
-        trade.exit_time = datetime.now()
+        trade.exit_time = trade.entry_time  # use sim time, not wall clock
         trade.pnl = pnl
         trade.status = "closed"
 
-        self.cash += pnl
+        self.cash += trade.entry_price * trade.quantity + pnl - self.commission_per_trade
         self._closed_trades.append(trade)
 
         logger.info(

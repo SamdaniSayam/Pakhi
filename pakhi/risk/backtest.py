@@ -233,13 +233,14 @@ class BacktestEngine:
         commission_bps: float = 5.0,
         slippage_bps: float = 2.0,
         instrument: str = "UNKNOWN",
+        retrain_fn: Callable[[pd.DataFrame], Callable[[pd.DataFrame, int], Signal]] | None = None,
     ) -> list[BacktestResult]:
         """Rolling window walk-forward backtest.
 
         Parameters
         ----------
         signal_generator : callable
-            ``(data, step_index) -> Signal``.
+            ``(data, step_index) -> Signal``.  Used if *retrain_fn* is None.
         data : DataFrame
             Price data with datetime index.
         train_window : int
@@ -254,6 +255,10 @@ class BacktestEngine:
             Slippage per trade.
         instrument : str
             Instrument label.
+        retrain_fn : callable, optional
+            ``(train_data) -> signal_generator``.  Called with the training
+            slice each fold to produce a new signal generator.  If ``None``,
+            the same *signal_generator* is reused (no retraining).
 
         Returns
         -------
@@ -284,13 +289,21 @@ class BacktestEngine:
         start = 0
 
         while start + train_window + test_window <= n:
-            test_start = start + train_window
+            train_start = start
+            train_end = start + train_window
+            test_start = train_end
             test_end = min(test_start + test_window, n)
 
+            train_data = data.iloc[train_start:train_end]
             test_data = data.iloc[test_start:test_end]
 
+            if retrain_fn is not None:
+                fold_signal_gen = retrain_fn(train_data)
+            else:
+                fold_signal_gen = signal_generator
+
             result = self.run(
-                signal_generator,
+                fold_signal_gen,
                 test_data,
                 initial_capital=initial_capital,
                 commission_bps=commission_bps,
@@ -319,11 +332,13 @@ class BacktestEngine:
         return 0.0
 
     @staticmethod
-    def _sharpe(returns: np.ndarray) -> float:
+    def _sharpe(returns: np.ndarray, risk_free_rate: float = 0.02) -> float:
         if len(returns) < 2:
             return 0.0
-        mu = np.mean(returns)
-        sigma = np.std(returns, ddof=1)
+        rf_per_day = risk_free_rate / 252
+        excess = returns - rf_per_day
+        mu = np.mean(excess)
+        sigma = np.std(excess, ddof=1)
         if sigma < 1e-15:
             return 0.0
         return float(mu / sigma * np.sqrt(252))

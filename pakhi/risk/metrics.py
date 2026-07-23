@@ -178,14 +178,16 @@ def calmar_ratio(returns: np.ndarray) -> float:
     if len(r) < 2:
         return np.nan
 
-    annual_return = float(np.mean(r) * 252)
+    n = len(r)
+    total_return = float(np.prod(1 + r))
+    cagr = total_return ** (252 / n) - 1 if n > 0 else 0.0
 
     equity = np.cumprod(1 + r)
     dd = max_drawdown(equity)
 
     if dd < 1e-15:
         return np.nan
-    return annual_return / dd
+    return cagr / dd
 
 
 def information_ratio(returns: np.ndarray, benchmark_returns: np.ndarray) -> float:

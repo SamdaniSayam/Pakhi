@@ -173,12 +173,16 @@ class AnomalyFeatures:
         return _spi_np(np.asarray(precipitation, dtype=np.float64), window_days)
 
 
-def _spi_np(precip: np.ndarray, window: int) -> np.ndarray:
-    """Compute SPI for a numpy array."""
+def _spi_np(precip: np.ndarray, window: int, fit_window: int = 365) -> np.ndarray:
+    """Compute SPI for a numpy array.
+
+    Uses a rolling window for gamma distribution fitting to avoid
+    data leakage — at time *t*, only data up to *t* is used.
+    """
     n = len(precip)
     spi_vals = np.full(n, np.nan)
 
-    # Accumulate precipitation
+    # Accumulate precipitation over the rolling window
     accum = np.full(n, np.nan)
     for i in range(n):
         start = max(0, i - window + 1)
@@ -187,22 +191,32 @@ def _spi_np(precip: np.ndarray, window: int) -> np.ndarray:
             continue
         accum[i] = np.nansum(vals)
 
-    valid = ~np.isnan(accum) & (accum > 0)
-    if valid.sum() < 10:
-        return spi_vals
+    # Rolling SPI: at each time t, fit gamma using only accum[:t+1]
+    min_obs = max(10, window)
+    for i in range(n):
+        if np.isnan(accum[i]):
+            continue
+        if accum[i] <= 0:
+            spi_vals[i] = 0.0  # zero precipitation → near-normal
+            continue
 
-    valid_data = accum[valid]
+        # Use up to fit_window historical observations (no future data)
+        fit_start = max(0, i - fit_window + 1)
+        fit_data = accum[fit_start : i + 1]
+        valid_fit = fit_data[~np.isnan(fit_data) & (fit_data > 0)]
 
-    try:
-        shape, loc, scale = stats.gamma.fit(valid_data, floc=0)
-    except (ValueError, RuntimeError):
-        return spi_vals
+        if len(valid_fit) < min_obs:
+            continue
 
-    cdf = stats.gamma.cdf(accum, a=shape, loc=loc, scale=scale)
-    cdf = np.clip(cdf, 1e-6, 1 - 1e-6)
-    spi_vals = stats.norm.ppf(cdf)
+        try:
+            shape, loc, scale = stats.gamma.fit(valid_fit, floc=0)
+        except (ValueError, RuntimeError):
+            continue
 
-    spi_vals[~valid] = 0.0
+        cdf = stats.gamma.cdf(accum[i], a=shape, loc=loc, scale=scale)
+        cdf = float(np.clip(cdf, 1e-6, 1 - 1e-6))
+        spi_vals[i] = float(stats.norm.ppf(cdf))
+
     return spi_vals
 
 

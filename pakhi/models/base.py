@@ -301,6 +301,7 @@ def compute_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     metrics: Sequence[str] = ("rmse", "mae", "acc"),
+    climatology_mean: float | None = None,
 ) -> dict[str, float]:
     """Compute standard forecast verification metrics.
 
@@ -311,6 +312,9 @@ def compute_metrics(
     metrics : sequence of str
         Requested metrics.  Supported: ``"rmse"``, ``"mae"``, ``"mape"``,
         ``"acc"`` (anomaly correlation coefficient), ``"bias"``.
+    climatology_mean : float, optional
+        Long-term climatological mean for ACC computation.  If ``None``,
+        uses the sample mean of *y_true* (less accurate but functional).
 
     Returns
     -------
@@ -348,8 +352,8 @@ def compute_metrics(
         elif key == "bias":
             results[m] = float(np.mean(yp - yt))
         elif key == "acc":
-            # Anomaly correlation coefficient (Pearson on anomalies from mean).
-            y_bar = np.mean(yt)
+            # Anomaly correlation coefficient (Pearson on anomalies from climatology).
+            y_bar = climatology_mean if climatology_mean is not None else np.mean(yt)
             num = np.sum((yt - y_bar) * (yp - y_bar))
             den = np.sqrt(np.sum((yt - y_bar) ** 2) * np.sum((yp - y_bar) ** 2))
             results[m] = float(num / den) if den > 0 else 0.0

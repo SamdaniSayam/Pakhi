@@ -1001,7 +1001,7 @@ Real-time operational flow (every 6 hours):
 
 ### Trading (optional)
 - `yfinance>=0.2` — Yahoo Finance futures
-- `ib-insyng>=1.0` — Interactive Brokers API
+- `ib_async>=1.0` — Interactive Brokers API
 
 ### Visualization (optional)
 - `matplotlib>=3.7`

@@ -183,12 +183,12 @@ class TemporalFeatures:
     def _anomaly_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
         for w in self.windows:
-            roll_mean = rolling_average(arr, w)
+            roll_mean = arr.rolling({time_dim: w}, min_periods=max(1, w // 2)).mean()
             std = arr.rolling({time_dim: w}, min_periods=max(1, w // 2)).std()
             std = std.where(std > 0, np.nan)
-            features[f"{name}_anomaly_{w}"] = (arr - roll_mean) / std
-            detect_result = detect_anomalies(arr, 3.0)
-            features[f"{name}_is_anomaly_{w}"] = detect_result
+            zscore = (arr - roll_mean) / std
+            features[f"{name}_anomaly_{w}"] = zscore
+            features[f"{name}_is_anomaly_{w}"] = np.abs(zscore) > 3.0
         return features
 
     def _ema_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
@@ -250,12 +250,10 @@ class TemporalFeatures:
             roll_mean = series.rolling(w, min_periods=max(1, w // 2)).mean()
             roll_std = series.rolling(w, min_periods=max(1, w // 2)).std()
             roll_std = roll_std.replace(0, np.nan)
-            cols[f"{name}_anomaly_{w}"] = (series - roll_mean) / roll_std
-            arr_np = series.values.astype(np.float64)
-            detect_result = detect_anomalies(xr.DataArray(arr_np, dims=["time"]), 3.0)
-            cols[f"{name}_is_anomaly_{w}"] = pd.Series(
-                detect_result.values, index=series.index, dtype=bool
-            )
+            zscore = (series - roll_mean) / roll_std
+            cols[f"{name}_anomaly_{w}"] = zscore
+            # Use rolling z-score for detection (no future data leakage)
+            cols[f"{name}_is_anomaly_{w}"] = zscore.abs() > 3.0
         return pd.DataFrame(cols, index=series.index)
 
     def _ema_pd(self, series: pd.Series, name: str) -> pd.DataFrame:

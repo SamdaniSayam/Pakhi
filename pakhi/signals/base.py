@@ -127,7 +127,7 @@ def position_size(
         return min(0.1, max_size)
 
     if method == "confidence":
-        return float(np.clip(confidence, 0.0, max_size))
+        return float(np.clip(confidence * max_size, 0.0, max_size))
 
     if method == "kelly":
         b = max(odds, 0.01)

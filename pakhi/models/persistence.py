@@ -105,6 +105,8 @@ class PersistenceModel(BaseModel):
             raise RuntimeError("Call fit() before predict().")
 
         X = np.asarray(X, dtype=np.float64)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
         n = X.shape[0]
 
         # Tile the last values across all samples and forecast steps.

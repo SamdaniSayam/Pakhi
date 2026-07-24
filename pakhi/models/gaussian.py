@@ -86,14 +86,23 @@ class _GPyTorchModel:
                 )
                 super().__init__(variational_strategy)
 
-            # We'll assign the likelihood and kernel outside.
+            def forward(self, x):
+                mean = self.mean_module(x)
+                covar = self.covar_module(x)
+                return gpytorch.distributions.MultivariateNormal(mean, covar)
 
         inducing = X_t[:n_ind]
         self.model = _SparseGPModel(inducing)
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
-        kernel = gpytorch.kernels.MaternKernel(nu=2.5)
-        kernel.lengthscale = torch.tensor([self.lengthscale_prior] * X_t.shape[1])
+        n_features = X_t.shape[1]
+        kernel = gpytorch.kernels.MaternKernel(
+            nu=2.5,
+            ard_num_dims=n_features,
+        )
+        kernel.lengthscale = torch.full(
+            (1, n_features), self.lengthscale_prior
+        )
         self.model.covar_module = kernel
 
         self.model.mean_module = gpytorch.means.ConstantMean()

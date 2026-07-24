@@ -170,14 +170,20 @@ class TemporalFeatures:
 
     def _trend_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
+        time_coord = arr.coords[time_dim].values
         for w in self.windows:
-            slope = (
-                arr.rolling({time_dim: w}, min_periods=max(3, w // 2))
-                .construct(time_dim)
-                .polyfit(dim=time_dim, deg=1)["polyfit_coefficients"]
-                .sel(degree=1)
+            result = np.full(arr.shape, np.nan)
+            for i in range(w - 1, arr.shape[0]):
+                window = arr.values[max(0, i - w + 1):i + 1]
+                if np.isnan(window).sum() < w // 2:
+                    t = np.arange(len(window))
+                    valid = ~np.isnan(window)
+                    if valid.sum() >= 2:
+                        coeffs = np.polyfit(t[valid], window[valid], 1)
+                        result[i] = coeffs[0]
+            features[f"{name}_trend_{w}"] = xr.DataArray(
+                result, dims=arr.dims, coords=arr.coords
             )
-            features[f"{name}_trend_{w}"] = slope
         return features
 
     def _anomaly_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
@@ -194,7 +200,7 @@ class TemporalFeatures:
     def _ema_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
         for span in self.ema_spans:
-            features[f"{name}_ema_{span}"] = ema(arr, span, dim=time_dim)
+            features[f"{name}_ema_{span}"] = ema(arr, span)
         return features
 
     def _rolling_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
@@ -260,8 +266,10 @@ class TemporalFeatures:
         cols: dict[str, pd.Series] = {}
         for span in self.ema_spans:
             arr_xr = xr.DataArray(series.values, dims=["time"])
-            ema_result = ema(arr_xr, span, dim="time")
-            cols[f"{name}_ema_{span}"] = pd.Series(ema_result.values, index=series.index)
+            ema_result = ema(arr_xr, span)
+            if hasattr(ema_result, 'values'):
+                ema_result = ema_result.values
+            cols[f"{name}_ema_{span}"] = pd.Series(ema_result, index=series.index)
         return pd.DataFrame(cols, index=series.index)
 
     def _rolling_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
@@ -269,5 +277,9 @@ class TemporalFeatures:
         for w in self.windows:
             arr_xr = xr.DataArray(series.values, dims=["time"])
             ra = rolling_average(arr_xr, w)
-            cols[f"{name}_rolling_{w}"] = pd.Series(ra.values, index=series.index)
+            if hasattr(ra, 'values'):
+                ra = ra.values
+            padded = np.full(len(series), np.nan)
+            padded[w - 1:] = ra[:len(series) - w + 1]
+            cols[f"{name}_rolling_{w}"] = pd.Series(padded, index=series.index)
         return pd.DataFrame(cols, index=series.index)

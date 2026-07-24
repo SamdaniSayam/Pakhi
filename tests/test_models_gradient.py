@@ -1,0 +1,60 @@
+"""Tests for pakhi.models.gradient — gradient boosting models."""
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+from unittest.mock import patch, MagicMock
+
+from pakhi.models.gradient import GradientForecaster, Backend
+
+
+def _make_data(n=200):
+    np.random.seed(42)
+    X = np.random.randn(n, 5)
+    y = X @ np.array([1.0, 2.0, 0.5, -1.0, 0.3]) + np.random.randn(n) * 0.1
+    return X, y
+
+
+class TestGradientForecaster:
+    def test_init_default(self):
+        model = GradientForecaster()
+        assert model is not None
+        assert model.backend == "lightgbm"
+
+    def test_init_xgboost(self):
+        model = GradientForecaster(backend="xgboost")
+        assert model.backend == "xgboost"
+
+    def test_init_invalid_backend(self):
+        with pytest.raises(ValueError, match="backend must be"):
+            GradientForecaster(backend="bad")
+
+    def test_fit_predict(self):
+        X, y = _make_data()
+        model = GradientForecaster(n_estimators=50, random_state=42)
+        model.fit(X, y)
+        result = model.predict(X)
+        assert result is not None
+        assert len(result.deterministic) == len(y)
+
+    def test_score(self):
+        X, y = _make_data()
+        model = GradientForecaster(n_estimators=50, random_state=42)
+        model.fit(X, y)
+        scores = model.score(X, y)
+        assert "rmse" in scores
+
+    def test_predict_before_fit(self):
+        X, y = _make_data()
+        model = GradientForecaster()
+        with pytest.raises(RuntimeError):
+            model.predict(X)
+
+    def test_fit_with_nan(self):
+        X, y = _make_data()
+        X[10:20, 0] = np.nan
+        model = GradientForecaster(n_estimators=50, random_state=42)
+        model.fit(X, y)
+        result = model.predict(X)
+        assert result is not None

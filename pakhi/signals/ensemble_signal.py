@@ -7,7 +7,7 @@ correlation-adjusted position sizing.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Sequence
 
 import numpy as np
@@ -79,7 +79,7 @@ class EnsembleSignal(BaseSignal):
         valid = [s for s in signals if s.confidence > 0]
         if not valid:
             return self._flat_signal(
-                signals[0].timestamp if signals else datetime.utcnow(),
+                signals[0].timestamp if signals else datetime.now(timezone.utc),
                 "No signals with confidence > 0.",
             )
 

@@ -11,7 +11,6 @@ from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any, TypeVar
 
-import dask.array as da
 import xarray as xr
 
 __all__ = ["StreamingProcessor"]
@@ -107,7 +106,7 @@ class StreamingProcessor:
                 end = min(start + chunk_size, n_steps)
                 slice_obj = {time_dim: slice(start, end)}
                 chunk = ds.isel(**slice_obj)
-                chunk = chunk.compute() if isinstance(chunk.data, da.Array) else chunk
+                chunk = chunk.compute() if hasattr(chunk, "chunks") and chunk.chunks else chunk
                 yield process_fn(chunk)
         finally:
             ds.close()

@@ -12,7 +12,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 import xarray as xr
-from triples_sigfast import detect_anomalies, ema, rolling_average
+from triples_sigfast import ema, rolling_average
 
 __all__ = ["TemporalFeatures"]
 
@@ -52,6 +52,7 @@ class TemporalFeatures:
         self.windows = list(windows) if windows is not None else list(DEFAULT_WINDOWS)
         self.stats = list(stats) if stats is not None else list(DEFAULT_STATS)
         self.ema_spans = list(ema_spans) if ema_spans is not None else [12, 24, 48]
+        self._warned_lengths: set[int] = set()
 
     def build(
         self,
@@ -109,6 +110,23 @@ class TemporalFeatures:
 
         return ds.assign(features)
 
+    def _windows_for(self, n: int) -> list[int]:
+        """Return the configured windows that fit a series of length ``n``.
+
+        Windows larger than the series produce meaningless features and trip
+        triples-sigfast's ``rolling_average`` length guard, so they are
+        skipped with a warning instead of raising.
+        """
+        too_large = [w for w in self.windows if w > n]
+        if too_large and n not in self._warned_lengths:
+            self._warned_lengths.add(n)
+            logger.warning(
+                "Skipping windows %s: data length %d is shorter than the window size",
+                too_large,
+                n,
+            )
+        return [w for w in self.windows if w <= n]
+
     def _build_pandas(
         self, df: pd.DataFrame | pd.Series, variables: list[str] | None
     ) -> pd.DataFrame:
@@ -155,7 +173,7 @@ class TemporalFeatures:
         self, arr: xr.DataArray, name: str, time_dim: str
     ) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
-        for w in self.windows:
+        for w in self._windows_for(arr.sizes[time_dim]):
             if "mean" in self.stats:
                 features[f"{name}_rollmean_{w}"] = rolling_average(arr, w)
             if "std" in self.stats:
@@ -170,25 +188,29 @@ class TemporalFeatures:
 
     def _trend_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
-        time_coord = arr.coords[time_dim].values
-        for w in self.windows:
-            result = np.full(arr.shape, np.nan)
-            for i in range(w - 1, arr.shape[0]):
-                window = arr.values[max(0, i - w + 1):i + 1]
-                if np.isnan(window).sum() < w // 2:
-                    t = np.arange(len(window))
+        axis = arr.dims.index(time_dim)
+
+        for w in self._windows_for(arr.sizes[time_dim]):
+            def _apply_trend(a, _w=w):
+                out = np.full(a.shape, np.nan)
+                for i in range(_w - 1, len(a)):
+                    window = a[max(0, i - _w + 1) : i + 1]
                     valid = ~np.isnan(window)
                     if valid.sum() >= 2:
+                        t = np.arange(len(window))
                         coeffs = np.polyfit(t[valid], window[valid], 1)
-                        result[i] = coeffs[0]
+                        out[i] = coeffs[0]
+                return out
+
+            res_values = np.apply_along_axis(_apply_trend, axis=axis, arr=arr.values)
             features[f"{name}_trend_{w}"] = xr.DataArray(
-                result, dims=arr.dims, coords=arr.coords
+                res_values, dims=arr.dims, coords=arr.coords
             )
         return features
 
     def _anomaly_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
-        for w in self.windows:
+        for w in self._windows_for(arr.sizes[time_dim]):
             roll_mean = arr.rolling({time_dim: w}, min_periods=max(1, w // 2)).mean()
             std = arr.rolling({time_dim: w}, min_periods=max(1, w // 2)).std()
             std = std.where(std > 0, np.nan)
@@ -205,7 +227,7 @@ class TemporalFeatures:
 
     def _rolling_xr(self, arr: xr.DataArray, name: str, time_dim: str) -> dict[str, xr.DataArray]:
         features: dict[str, xr.DataArray] = {}
-        for w in self.windows:
+        for w in self._windows_for(arr.sizes[time_dim]):
             features[f"{name}_rolling_{w}"] = rolling_average(arr, w)
         return features
 
@@ -221,7 +243,7 @@ class TemporalFeatures:
 
     def _window_stats_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
         cols: dict[str, pd.Series] = {}
-        for w in self.windows:
+        for w in self._windows_for(len(series)):
             roll = series.rolling(w, min_periods=max(1, w // 2))
             if "mean" in self.stats:
                 cols[f"{name}_rollmean_{w}"] = roll.mean()
@@ -235,7 +257,7 @@ class TemporalFeatures:
 
     def _trend_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
         cols: dict[str, pd.Series] = {}
-        for w in self.windows:
+        for w in self._windows_for(len(series)):
 
             def _slope(window: np.ndarray) -> float:
                 if len(window) < 2 or np.all(np.isnan(window)):
@@ -252,7 +274,7 @@ class TemporalFeatures:
 
     def _anomaly_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
         cols: dict[str, pd.Series] = {}
-        for w in self.windows:
+        for w in self._windows_for(len(series)):
             roll_mean = series.rolling(w, min_periods=max(1, w // 2)).mean()
             roll_std = series.rolling(w, min_periods=max(1, w // 2)).std()
             roll_std = roll_std.replace(0, np.nan)
@@ -274,7 +296,7 @@ class TemporalFeatures:
 
     def _rolling_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
         cols: dict[str, pd.Series] = {}
-        for w in self.windows:
+        for w in self._windows_for(len(series)):
             arr_xr = xr.DataArray(series.values, dims=["time"])
             ra = rolling_average(arr_xr, w)
             if hasattr(ra, 'values'):

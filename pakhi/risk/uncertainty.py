@@ -37,17 +37,21 @@ def ensemble_spread(ensemble_forecasts: np.ndarray) -> float:
         array.
     """
     arr = np.asarray(ensemble_forecasts, dtype=np.float64)
-    arr = arr[np.isfinite(arr)]
 
-    if arr.size == 0:
-        return np.nan
+    if (arr.size == 0 or np.sum(np.isfinite(arr)) < 2) and (arr.ndim == 1 or arr.size == 0):
+        return 0.0 if arr.size > 0 else np.nan
 
     if arr.ndim == 1:
-        if len(arr) < 2:
-            return 0.0
-        return float(np.std(arr, ddof=1))
+        return float(np.nanstd(arr, ddof=1))
 
-    spreads = np.std(arr, axis=1, ddof=1)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        spreads = np.nanstd(arr, axis=1, ddof=1)
+
+    spreads = spreads[np.isfinite(spreads)]
+    if len(spreads) == 0:
+        return np.nan
     return float(np.mean(spreads))
 
 

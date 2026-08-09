@@ -259,7 +259,7 @@ class GFSConnector:
                 ds = xr.open_dataset(
                     p,
                     engine="cfgrib",
-                    index_keys=["time", "step", "latitude", "longitude"],
+                    backend_kwargs={"indexpath": ""},
                 )
                 datasets.append(ds)
             except Exception:

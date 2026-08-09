@@ -227,10 +227,12 @@ def forecast(
             progress.add_task(f"Fetching {days}-day forecast for {location}")
             from pakhi.src.openmeteo import OpenMeteoConnector
 
-            lat, lon = _geocode(location)
+            _lat, _lon = lat, lon
+            if _lat is None or _lon is None:
+                _lat, _lon = _geocode(location)
             connector = OpenMeteoConnector()
             hourly_var = _resolve_hourly_variable(variable)
-            data = connector.forecast(lat=lat, lon=lon, days=days, hourly=[hourly_var])
+            data = connector.forecast(lat=_lat, lon=_lon, days=days, hourly=[hourly_var])
     except Exception as exc:
         if not quiet:
             _print(
@@ -408,7 +410,11 @@ def signal(
             else f"Evaluating signal for {instrument}..."
         )
 
-    inst = get_instrument(instrument)
+    try:
+        inst = get_instrument(instrument)
+    except KeyError as e:
+        _exit_error(str(e))
+
     action, confidence, reasoning = _evaluate_signal(instrument)
 
     portfolio = Portfolio(max_position=0.1)
@@ -631,7 +637,11 @@ def backtest(
             else f"Running backtest for {instrument} ({start} → {end})..."
         )
 
-    inst = get_instrument(instrument)
+    try:
+        inst = get_instrument(instrument)
+    except KeyError as e:
+        _exit_error(str(e))
+
 
     try:
         start_dt = datetime.strptime(start, "%Y-%m-%d")

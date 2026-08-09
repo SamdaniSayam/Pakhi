@@ -59,8 +59,7 @@ class AnomalyFeatures:
             return (data - climatology_mean) / std
 
         if isinstance(data, pd.Series):
-            std = climatology_std.copy()
-            std[std <= 0] = np.nan
+            std = np.where(climatology_std > 0, climatology_std, np.nan)
             return (data - climatology_mean) / std
 
         arr = np.asarray(data, dtype=np.float64)

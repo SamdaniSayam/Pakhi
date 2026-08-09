@@ -298,7 +298,7 @@ class CMEWeatherConnector:
             Series of daily HDD values.
         """
         temp_f = temperature_series.copy()
-        if temp_f.max() < 100:  # Likely Celsius
+        if temp_f.max() < 50:  # Likely Celsius
             temp_f = temp_f * 9.0 / 5.0 + 32.0
         hdd = (base_temp_f - temp_f).clip(lower=0)
         hdd.name = "HDD"
@@ -319,7 +319,7 @@ class CMEWeatherConnector:
             Series of daily CDD values.
         """
         temp_f = temperature_series.copy()
-        if temp_f.max() < 100:  # Likely Celsius
+        if temp_f.max() < 50:  # Likely Celsius
             temp_f = temp_f * 9.0 / 5.0 + 32.0
         cdd = (temp_f - base_temp_f).clip(lower=0)
         cdd.name = "CDD"

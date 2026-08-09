@@ -278,6 +278,7 @@ class PaperTrader:
         unrealised = 0.0
         for trade in self._open_trades.values():
             price = current_prices.get(trade.instrument, trade.entry_price)
+            unrealised += trade.entry_price * trade.quantity
             if trade.direction == TradeDirection.LONG:
                 unrealised += (price - trade.entry_price) * trade.quantity
             else:

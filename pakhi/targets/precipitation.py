@@ -141,11 +141,14 @@ def drought_index(
     kernel = np.ones(window_days, dtype=np.float64)
     cumul = np.convolve(arr, kernel, mode="valid")
 
+    if len(cumul) < 2:
+        return 0.0
+
     # Fit gamma distribution (SPI convention: shift zero-precipitation differently)
     # Use L-moment approximation for gamma parameters when possible.
     mean = np.mean(cumul)
     var = np.var(cumul, ddof=1)
-    if mean <= 0 or var <= 0:
+    if mean <= 0 or np.isnan(var) or var <= 0:
         return 0.0
 
     # Method of moments for gamma

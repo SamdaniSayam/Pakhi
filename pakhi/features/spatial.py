@@ -141,17 +141,20 @@ class SpatialFeatures:
         else:
             arr = data
 
-        if dx_km is None:
-            lats = np.asarray(arr[lat_dim].values, dtype=np.float64)
-            lons = np.asarray(arr[lon_dim].values, dtype=np.float64)
-            lat_res = abs(float(np.mean(np.diff(lats)))) * DEG_TO_RAD * EARTH_RADIUS_KM
-            lon_res = abs(float(np.mean(np.diff(lons)))) * DEG_TO_RAD * EARTH_RADIUS_KM
-        else:
-            lat_res = dx_km
-            lon_res = dx_km
+        d_dx_deg = arr.differentiate(lon_dim)
+        d_dy_deg = arr.differentiate(lat_dim)
 
-        d_dx = arr.differentiate(lon_dim) / lon_res
-        d_dy = arr.differentiate(lat_dim) / lat_res
+        if dx_km is None:
+            lat_rad = arr[lat_dim] * DEG_TO_RAD
+            dx_per_deg = EARTH_RADIUS_KM * DEG_TO_RAD * np.cos(lat_rad)
+            dx_per_deg = dx_per_deg.where(np.abs(dx_per_deg) > 1e-6, 1e-6)
+            dy_per_deg = EARTH_RADIUS_KM * DEG_TO_RAD
+
+            d_dx = d_dx_deg / dx_per_deg
+            d_dy = d_dy_deg / dy_per_deg
+        else:
+            d_dx = d_dx_deg / dx_km
+            d_dy = d_dy_deg / dx_km
 
         magnitude = np.sqrt(d_dx**2 + d_dy**2)
         direction = np.arctan2(d_dy, d_dx)
@@ -190,17 +193,20 @@ class SpatialFeatures:
         u = data[u_var]
         v = data[v_var]
 
-        if dx_km is None:
-            lats = np.asarray(data[lat_dim].values, dtype=np.float64)
-            lons = np.asarray(data[lon_dim].values, dtype=np.float64)
-            lat_res = abs(float(np.mean(np.diff(lats)))) * DEG_TO_RAD * EARTH_RADIUS_KM
-            lon_res = abs(float(np.mean(np.diff(lons)))) * DEG_TO_RAD * EARTH_RADIUS_KM
-        else:
-            lat_res = dx_km
-            lon_res = dx_km
+        du_dx_deg = u.differentiate(lon_dim)
+        dv_dy_deg = v.differentiate(lat_dim)
 
-        du_dx = u.differentiate(lon_dim) / lon_res
-        dv_dy = v.differentiate(lat_dim) / lat_res
+        if dx_km is None:
+            lat_rad = data[lat_dim] * DEG_TO_RAD
+            dx_per_deg = EARTH_RADIUS_KM * DEG_TO_RAD * np.cos(lat_rad)
+            dx_per_deg = dx_per_deg.where(np.abs(dx_per_deg) > 1e-6, 1e-6)
+            dy_per_deg = EARTH_RADIUS_KM * DEG_TO_RAD
+
+            du_dx = du_dx_deg / dx_per_deg
+            dv_dy = dv_dy_deg / dy_per_deg
+        else:
+            du_dx = du_dx_deg / dx_km
+            dv_dy = dv_dy_deg / dx_km
 
         div = du_dx + dv_dy
 

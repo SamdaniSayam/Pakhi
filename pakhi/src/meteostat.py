@@ -238,18 +238,18 @@ class MeteostatConnector:
         for obs in data.get("data", []):
             record: dict[str, Any] = {
                 "date": obs.get("date", ""),
-                "temperature_max": obs.get("temperature_max"),
-                "temperature_min": obs.get("temperature_min"),
-                "temperature_mean": obs.get("temperature_mean"),
-                "precipitation": obs.get("precipitations"),
-                "windspeed_max": obs.get("windspeed_max"),
-                "winddirection": obs.get("winddirection_mean"),
-                "windgust_max": obs.get("windgust_max"),
-                "pressure_mean": obs.get("pressure_mean"),
-                "humidity_mean": obs.get("humidity_mean"),
-                "cloudcover_mean": obs.get("cloudcover_mean"),
-                "visibility_mean": obs.get("visibility_mean"),
-                "weather": obs.get("weather"),
+                "temperature_max": obs.get("tmax"),
+                "temperature_min": obs.get("tmin"),
+                "temperature_mean": obs.get("tavg"),
+                "precipitation": obs.get("prcp"),
+                "windspeed_max": obs.get("wspd"),
+                "winddirection": obs.get("wdir"),
+                "windgust_max": obs.get("wpgt"),
+                "pressure_mean": obs.get("pres"),
+                "humidity_mean": obs.get("rhum"),
+                "cloudcover_mean": obs.get("coco"),
+                "visibility_mean": obs.get("tsun"),
+                "weather": obs.get("coco"),
             }
             records.append(record)
 

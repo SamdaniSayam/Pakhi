@@ -189,6 +189,18 @@ class TestTemperature:
         hi = heat_index(20.0, 50.0)
         assert hi < 30.0
 
+    def test_heat_index_celsius_conversion(self):
+        # The Steadman simple formula's constants are in °F; passing °C
+        # directly used to produce absurd values (e.g. 23 °C at 30 °C/10 %).
+        assert heat_index(30.0, 50.0) == pytest.approx(31.05, abs=0.1)
+        assert heat_index(30.0, 10.0) == pytest.approx(29.32, abs=0.1)
+        assert heat_index(20.0, 50.0) == pytest.approx(19.36, abs=0.1)
+
+    def test_heat_index_rothfusz_adjustment(self):
+        # RH > 85 % and 80 °F <= T <= 87 °F applies the positive adjustment.
+        hi = heat_index(30.0, 90.0)
+        assert hi > 30.0
+
     def test_wind_chill(self):
         wc = wind_chill(-10.0, 30.0)
         assert wc < -10.0

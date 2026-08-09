@@ -528,15 +528,12 @@ class TestGradientForecasterExtended:
             pytest.skip("xgboost not installed")
         from pakhi.models.gradient import GradientForecaster
 
-        try:
-            m = GradientForecaster(
-                backend="xgboost", n_estimators=200, max_depth=3, early_stopping_rounds=10
-            )
-            m.fit(self.X, self.y, X_val=self.X_val, y_val=self.y_val)
-            res = m.predict(self.X[:10])
-            assert res.deterministic.shape == (10, 1)
-        except TypeError:
-            pytest.skip("xgboost version does not support early_stopping_rounds in fit()")
+        m = GradientForecaster(
+            backend="xgboost", n_estimators=200, max_depth=3, early_stopping_rounds=10
+        )
+        m.fit(self.X, self.y, X_val=self.X_val, y_val=self.y_val)
+        res = m.predict(self.X[:10])
+        assert res.deterministic.shape == (10, 1)
 
     def test_quantile_objective_lgb(self):
         if not self.has_lgb:
@@ -1283,12 +1280,9 @@ class TestLSTMForecasterExtended:
             patience=3,
         )
         m.fit(X, y)
-        # predict returns n_samples - seq_len rows due to sliding window
+        # predict returns n_samples rows due to padding in sliding window
         n_input = 50
-        n_output = n_input - seq_len
-        if n_output <= 0:
-            pytest.skip("Not enough data for score")
-        scores = m.score(X[:n_input], y[seq_len:n_input])
+        scores = m.score(X[:n_input], y[:n_input])
         assert "rmse" in scores
         assert scores["rmse"] >= 0
 

@@ -136,16 +136,19 @@ class EnsembleForecaster(BaseModel):
     def _fit_stacking_meta(self, X_val: np.ndarray, y_val: np.ndarray) -> None:
         """Train a ridge-regression meta-learner on model predictions."""
         stacked = self._collect_deterministic(X_val)  # (m, n, t)
-        _n_models, n_samples, _n_targets = stacked.shape
-        # Flatten per-sample: (n, m*t)
-        meta_X = stacked.transpose(1, 0, 2).reshape(n_samples, -1)
-        meta_y = y_val.ravel()[:n_samples]
+        _n_models, n_samples, n_targets = stacked.shape
+
+        y_val_2d = y_val.reshape(n_samples, -1)
+        if y_val_2d.shape[1] != n_targets:
+            raise ValueError("Target shape mismatch in stacking.")
+
+        meta_X = stacked.transpose(1, 0, 2).reshape(n_samples, -1) # (n, m*t)
 
         # Ridge regression: (X^T X + αI)^{-1} X^T y
         XtX = meta_X.T @ meta_X + self.meta_alpha * np.eye(meta_X.shape[1])
-        Xty = meta_X.T @ meta_y
-        self._meta_coefs = np.linalg.solve(XtX, Xty)
-        self._meta_intercept = float(np.mean(meta_y) - meta_X.mean(axis=0) @ self._meta_coefs)
+        Xty = meta_X.T @ y_val_2d
+        self._meta_coefs = np.linalg.solve(XtX, Xty) # (m*t, t)
+        self._meta_intercept = np.mean(y_val_2d, axis=0) - meta_X.mean(axis=0) @ self._meta_coefs
 
     # ------------------------------------------------------------------
     # Public API
@@ -209,15 +212,15 @@ class EnsembleForecaster(BaseModel):
             raise RuntimeError("Call fit() before predict().")
 
         stacked = self._collect_deterministic(X)  # (m, n, t)
-        n_models, n_samples, n_targets = stacked.shape
+        n_models, n_samples, _n_targets = stacked.shape
 
         if self.method == "stacking" and self._meta_coefs is not None:
             meta_X = stacked.transpose(1, 0, 2).reshape(n_samples, -1)
             # Pad if needed.
-            if meta_X.shape[1] < len(self._meta_coefs):
-                pad = np.zeros((n_samples, len(self._meta_coefs) - meta_X.shape[1]))
+            if meta_X.shape[1] < self._meta_coefs.shape[0]:
+                pad = np.zeros((n_samples, self._meta_coefs.shape[0] - meta_X.shape[1]))
                 meta_X = np.concatenate([meta_X, pad], axis=1)
-            det = (meta_X @ self._meta_coefs + self._meta_intercept).reshape(-1, n_targets)
+            det = (meta_X @ self._meta_coefs + self._meta_intercept) # (n, t)
         else:
             w = self._weights
             if w is None:

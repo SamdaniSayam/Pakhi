@@ -166,7 +166,9 @@ class RefreshScheduler:
             except Exception:
                 logger.exception("Refresh callback failed for job %s", job_id)
             interval = timedelta(hours=job["interval_hours"])
-            job["next_run"] = now + interval
+            with self._lock:
+                if job_id in self._jobs:
+                    self._jobs[job_id]["next_run"] = now + interval
 
         self._timer = threading.Timer(self.check_interval_seconds, self._tick)
         self._timer.daemon = True

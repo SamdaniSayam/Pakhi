@@ -30,6 +30,16 @@ ENV/
 .coverage
 htmlcov/
 coverage.xml
+cov*.txt
+gaps.txt
+missing_lines_context.txt
+
+# Scratch analysis scripts
+fix_*.py
+run_all_tests.py
+test_gaps.py
+test_mock.py
+test_script.py
 
 # Ruff
 .ruff_cache/

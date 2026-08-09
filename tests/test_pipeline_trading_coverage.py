@@ -1444,7 +1444,6 @@ class TestClimateFeatures:
         result = ClimateFeatures.heatwave_days(temps, consecutive_days=2)
         assert isinstance(result, pd.Series)
 
-    @pytest.mark.xfail(reason="source bug: _streak_xr passes dtype to xr.DataArray which does not accept it")
     def test_heatwave_days_xr(self):
         from pakhi.features.climate import ClimateFeatures
         temps = xr.DataArray([36, 37, 38, 25])

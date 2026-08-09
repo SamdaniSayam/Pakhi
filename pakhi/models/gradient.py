@@ -69,7 +69,7 @@ def _compute_feature_importance_summary(
         total = 1.0
     importance = (raw / total).tolist()
 
-    if feature_names is None:
+    if feature_names is None or len(feature_names) != len(importance):
         feature_names = [f"feature_{i}" for i in range(len(importance))]
 
     ranking = dict(
@@ -164,6 +164,7 @@ class GradientForecaster(BaseModel):
 
         self._models: dict[float, Any] = {}  # quantile → fitted model
         self._feature_importance: dict[str, float] = {}
+        self._multioutput_models: list[Any] | None = None
         self._fitted = False
 
     # ------------------------------------------------------------------
@@ -229,10 +230,11 @@ class GradientForecaster(BaseModel):
 
         fit_kwargs: dict[str, Any] = {}
         if X_val is not None and y_val is not None:
-            fit_kwargs["eval_set"] = [(X_val, y_val)]
+            y_val_to_use = y_val.ravel() if y.ndim == 1 else y_val
+            fit_kwargs["eval_set"] = [(X_val, y_val_to_use)]
             if self.early_stopping_rounds is not None:
                 if self.backend == "xgboost":
-                    fit_kwargs["early_stopping_rounds"] = self.early_stopping_rounds
+                    model.set_params(early_stopping_rounds=self.early_stopping_rounds)
                     fit_kwargs["verbose"] = False
                 else:
                     fit_kwargs["callbacks"] = [
@@ -284,6 +286,7 @@ class GradientForecaster(BaseModel):
             y = y.reshape(-1, 1)
 
         self._models = {}
+        self._multioutput_models = None
         n_targets = y.shape[1]
 
         if self.objective == "quantile" and n_targets == 1:
@@ -298,7 +301,7 @@ class GradientForecaster(BaseModel):
                 model = self._fit_single_quantile(X, y.ravel(), X_val, y_val)
                 self._models[0.5] = model
             else:
-                self._multioutput_models: list[Any] = []
+                self._multioutput_models = []
                 for col in range(n_targets):
                     m = self._fit_single_quantile(X, y[:, col], X_val, y_val)
                     self._multioutput_models.append(m)
@@ -332,7 +335,7 @@ class GradientForecaster(BaseModel):
         if X.ndim != 2:
             raise ValueError(f"X must be 2-D, got shape {X.shape}")
 
-        if hasattr(self, "_multioutput_models"):
+        if self._multioutput_models is not None:
             preds = np.column_stack([m.predict(X) for m in self._multioutput_models])
         else:
             # Use the median (0.5) model if available, else first available.
@@ -373,7 +376,7 @@ class GradientForecaster(BaseModel):
         result = self.predict(X)
         result.quantiles = {}
 
-        if hasattr(self, "_multioutput_models"):
+        if self._multioutput_models is not None:
             # Multi-output doesn't support per-quantile models; return
             # deterministic as every quantile.
             for q in quantiles:

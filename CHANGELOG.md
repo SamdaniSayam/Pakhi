@@ -5,6 +5,42 @@ All notable changes to Pakhi will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Temporal features: short series no longer crash — rolling windows larger than the
+  series length are skipped with a warning instead of raising in triples-sigfast
+- Gradient forecaster: refitting single-target after a multi-output fit no longer
+  returns stale multi-output shapes (`_multioutput_models` reset in `fit`)
+- Heat index: simple Steadman formula now converts °C→°F before applying the °F
+  constants (was returning ~23 °C for 30 °C / 10 % RH); removed unreachable `RH < 13`
+  adjustment branch (Rothfusz path requires `RH >= 40`)
+- Sortino ratio: downside deviation uses `sqrt(mean(downside²))` (downside risk)
+- LSTM: sliding-window dataset padded so predictions align 1:1 with inputs
+  (`n_samples == len(y)`); NaN-guarded pinball loss
+- Multi-step AR predictor: corrected output-matrix shape `(n - steps + 1, steps)`
+- CLI: `get_instrument` `KeyError` handled gracefully; Open-Meteo geocode fallback
+- Spatial gradients: scale d/dx, d/dy by `cos(lat)` in km when `dx_km` is None
+- Climate heatwave streaks: `_streak_xr` rewritten to correct window alignment
+- Meteostat: use the canonical `tmax/tmin/tavg/prcp/...` response field names
+- ERA5: cache filename hashed per variable set; Zarr path cleanup
+- GFS (NOAA): cfgrib `backend_kwargs={"indexpath": ""}` instead of `index_keys`
+- Paper trader: unrealised PnL includes entry cost basis; cash handling fix
+- Scheduler: `next_run` update guarded by lock to avoid races on job removal
+- CME HDD/CDD: Celsius detection threshold `100 → 50` °F
+- Viz heatmap: annotation contrast derived from actual data range
+- Anomaly features: guard zero/negative climatology std via `np.where`
+- Precipitation SPI: guard NaN variance and short cumulative windows
+- Ensemble signal: use timezone-aware `datetime.now(timezone.utc)`
+- Power signal: guard empty wind-capacity-factor arrays
+- Stream processor: drop unused `dask.array` import; robust compute check
+
+### Tests
+- Coverage raised to 99.61 % (24 → 22 missed lines); `temperature.py` at 100 %
+- Regression tests for temporal short-series, gradient multi-output refit,
+  heat-index °C/°F conversion
+- 23 new coverage test files; lint clean (`ruff check pakhi/`)
+
 ## [1.0.0] - 2025-07-21
 
 ### Added

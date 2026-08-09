@@ -17,6 +17,7 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -286,7 +287,8 @@ class ERA5Connector:
 
         if self.single_level_vars:
             request = self._build_single_level_request(self.single_level_vars, dates)
-            target = f"era5_single_{start}_{end}.nc"
+            var_hash = hashlib.md5(str(self.single_level_vars).encode()).hexdigest()[:8]
+            target = f"era5_single_{start}_{end}_{var_hash}.nc"
             try:
                 path = self._download_dataset(
                     request, target, product="reanalysis-era5-single-levels"
@@ -299,7 +301,8 @@ class ERA5Connector:
 
         if self.pressure_level_vars:
             request = self._build_pressure_level_request(self.pressure_level_vars, dates)
-            target = f"era5_pressure_{start}_{end}.nc"
+            var_hash = hashlib.md5(str(self.pressure_level_vars).encode()).hexdigest()[:8]
+            target = f"era5_pressure_{start}_{end}_{var_hash}.nc"
             try:
                 path = self._download_dataset(
                     request, target, product="reanalysis-era5-pressure-levels"
@@ -313,9 +316,7 @@ class ERA5Connector:
         if not datasets:
             raise RuntimeError("No data fetched — check variable names and date range")
 
-        if len(datasets) == 1:
-            return datasets[0]
-        return xr.merge(datasets, compat="override")
+        return datasets[0]
 
     def fetch_monthly(
         self,
@@ -369,17 +370,14 @@ class ERA5Connector:
         """
         try:
             import zarr
-            import gcsfs
         except ImportError as exc:
             raise ImportError(
-                "zarr and gcsfs are required for Google Zarr access. "
-                "Install with: pip install zarr gcsfs"
+                "zarr is required for Google Zarr access. "
+                "Install with: pip install zarr"
             ) from exc
 
         # Google Zarr ERA5 dataset
         # https://console.cloud.google.com/storage/browser/gcp-public-data-era5
-        bucket = "gcp-public-data-era5"
-        zarr_path = f"gs://{bucket}/era5/"
 
         # Map variable names to Zarr store paths
         var_mapping = {
@@ -425,8 +423,8 @@ class ERA5Connector:
 
         if not datasets:
             raise RuntimeError(
-                f"No data fetched from Google Zarr. "
-                f"Check variable names and date range."
+                "No data fetched from Google Zarr. "
+                "Check variable names and date range."
             )
 
         # Merge datasets

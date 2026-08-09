@@ -246,6 +246,11 @@ class ClimateFeatures:
 
     @staticmethod
     def _streak_np(mask: np.ndarray, min_length: int) -> np.ndarray:
+        if mask.ndim == 0:
+            return np.zeros_like(mask, dtype=bool)
+        if mask.ndim > 1:
+            return np.apply_along_axis(lambda m: ClimateFeatures._streak_np(m, min_length), axis=0, arr=mask)
+
         result = np.zeros_like(mask, dtype=bool)
         count = 0
         start = 0
@@ -270,6 +275,11 @@ class ClimateFeatures:
 
     @staticmethod
     def _streak_xr(da: xr.DataArray, min_length: int) -> xr.DataArray:
-        arr = np.asarray(da, dtype=bool)
-        result = ClimateFeatures._streak_np(arr, min_length)
-        return xr.DataArray(result, coords=da.coords, dims=da.dims, dtype=bool)
+        time_dim = "time" if "time" in da.dims else next(iter(da.dims))
+        roll_sum = da.rolling({time_dim: min_length}, min_periods=min_length).sum()
+        is_streak = roll_sum >= min_length
+
+        result = is_streak.copy()
+        for i in range(1, min_length):
+            result = result | is_streak.shift({time_dim: -i}, fill_value=False)
+        return result

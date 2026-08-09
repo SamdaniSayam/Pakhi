@@ -127,7 +127,7 @@ def sortino_ratio(returns: np.ndarray, risk_free_rate: float = 0.02) -> float:
     downside = excess[excess < 0]
     if len(downside) == 0:
         return np.nan
-    downside_std = np.std(downside, ddof=1)
+    downside_std = np.sqrt(np.mean(downside**2))
     if downside_std < 1e-15:
         return np.nan
     return float(mu / downside_std * np.sqrt(252))

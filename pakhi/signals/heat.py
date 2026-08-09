@@ -113,10 +113,11 @@ class PowerSignal(BaseSignal):
         wind_amplifier = 1.0
         if wind_cf is not None:
             wind_arr = np.asarray(wind_cf, dtype=np.float64)
-            mean_wind = float(np.mean(wind_arr))
-            if mean_wind < self.wind_capacity_factor_threshold:
-                wind_share = self.WIND_SHARE.get(market, 0.10)
-                wind_amplifier = 1.0 + wind_share * 2.0
+            if wind_arr.size > 0:
+                mean_wind = float(np.mean(wind_arr))
+                if mean_wind < self.wind_capacity_factor_threshold:
+                    wind_share = self.WIND_SHARE.get(market, 0.10)
+                    wind_amplifier = 1.0 + wind_share * 2.0
 
         severity = float(np.clip(cdd / 500.0, 0.0, 1.0))
         effective_prob = min(severity * wind_amplifier, 0.95)

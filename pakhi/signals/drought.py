@@ -84,7 +84,7 @@ class DroughtSignal(BaseSignal):
         below_threshold = spi_values < self.spi_threshold
         consecutive_drought = self._max_consecutive(below_threshold)
 
-        if consecutive_drought < self.min_days:
+        if consecutive_drought < self.min_days or not np.any(below_threshold):
             return self._flat_signal(
                 current_time,
                 f"SPI below {self.spi_threshold} for only {consecutive_drought} days "

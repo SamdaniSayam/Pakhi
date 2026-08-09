@@ -192,6 +192,38 @@ class TestTemporal:
         result = tf.build(df)
         assert result.shape[1] > 1
 
+    def test_build_short_pandas_df(self):
+        # Series shorter than the default windows must not crash
+        # (triples-sigfast rolling_average raises if len < window).
+        df = pd.DataFrame({"t": np.linspace(20.0, 30.0, 10)},
+                          index=pd.date_range("2020-01-01", periods=10, freq="h"))
+        result = TemporalFeatures().build(df)
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 10
+        assert "t_lag_1" in result.columns
+
+    def test_build_short_series(self):
+        s = pd.Series(np.linspace(20.0, 30.0, 10),
+                      index=pd.date_range("2020-01-01", periods=10, freq="h"))
+        result = TemporalFeatures().build(s)
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 10
+
+    def test_build_short_xarray(self):
+        ds = xr.Dataset(
+            {"t": ("time", np.linspace(20.0, 30.0, 10))},
+            coords={"time": np.arange(10)},
+        )
+        result = TemporalFeatures().build(ds)
+        assert len(result.data_vars) > 1
+
+    def test_long_series_keeps_full_windows(self):
+        df = pd.DataFrame({"t": np.random.randn(300)},
+                          index=pd.date_range("2020-01-01", periods=300, freq="h"))
+        result = TemporalFeatures().build(df)
+        assert "t_rollmean_168" in result.columns
+        assert "t_rolling_168" in result.columns
+
 
 class TestClimate:
     def test_hdd(self):

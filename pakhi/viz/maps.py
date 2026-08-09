@@ -252,6 +252,9 @@ def plot_heatmap(
 
     im = ax.imshow(data, aspect="auto", **kwargs)
 
+    vmin_actual, vmax_actual = im.get_clim()
+    threshold = max(abs(vmin_actual), abs(vmax_actual)) * 0.6
+
     if annotate:
         for i in range(ny):
             for j in range(nx):
@@ -264,7 +267,7 @@ def plot_heatmap(
                     ha="center",
                     va="center",
                     fontsize=max(6, min(10, 120 // max(ny, nx))),
-                    color="white" if abs(val) > (kwargs.get("vmax", 1.0) or 1.0) * 0.6 else "black",
+                    color="white" if abs(val) > threshold else "black",
                 )
 
     if x_labels is not None:

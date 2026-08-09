@@ -75,9 +75,13 @@ class WeatherDataset:
     ) -> None:
         torch, _ = _lazy_torch()
         self.seq_len = seq_len
-        self.X = torch.tensor(np.asarray(X, dtype=np.float32))
+        X_arr = np.asarray(X, dtype=np.float32)
+        if X_arr.shape[0] > 0 and seq_len > 1:
+            pad = np.repeat(X_arr[0:1], seq_len - 1, axis=0)
+            X_arr = np.vstack([pad, X_arr])
+        self.X = torch.tensor(X_arr)
         self.y = torch.tensor(np.asarray(y, dtype=np.float32))
-        self.n_samples = max(0, self.X.shape[0] - seq_len)
+        self.n_samples = self.y.shape[0]
 
     def __len__(self) -> int:
         return self.n_samples
@@ -86,7 +90,7 @@ class WeatherDataset:
         start = idx
         end = idx + self.seq_len
         x_seq = self.X[start:end]  # (seq_len, features)
-        y_val = self.y[end - 1]  # predict from last step in window
+        y_val = self.y[idx]  # predict from aligned step
         return x_seq, y_val
 
 
@@ -174,7 +178,14 @@ def _pinball_loss(
     losses = []
     for q in quantiles:
         errors = targets - predictions
-        losses.append(torch.max(q * errors, (q - 1.0) * errors).mean())
+        loss_q = torch.max(q * errors, (q - 1.0) * errors)
+        mask = ~torch.isnan(loss_q)
+        if mask.any():
+            losses.append(loss_q[mask].mean())
+        else:
+            losses.append(torch.tensor(0.0, device=predictions.device, requires_grad=True))
+    if not losses:
+        return torch.tensor(0.0, device=predictions.device, requires_grad=True)
     return torch.stack(losses).mean()
 
 

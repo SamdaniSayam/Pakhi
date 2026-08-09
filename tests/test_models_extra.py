@@ -393,7 +393,7 @@ class TestLSTMForecaster:
         X = np.random.randn(100, 4).astype(np.float32)
         y = np.random.randn(100).astype(np.float32)
         ds = WeatherDataset(X, y, seq_len=10)
-        assert len(ds) == 90
+        assert len(ds) == 100
         x_seq, _y_val = ds[0]
         assert x_seq.shape == (10, 4)
 

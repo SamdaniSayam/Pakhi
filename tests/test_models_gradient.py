@@ -58,3 +58,37 @@ class TestGradientForecaster:
         model.fit(X, y)
         result = model.predict(X)
         assert result is not None
+
+    def test_multioutput_refit_clears_stale_flag(self):
+        """Refitting single-target after a multi-output fit must return (n, 1)."""
+        X = np.random.randn(20, 3)
+        y_multi = np.random.randn(20, 2)
+        y_single = np.random.randn(20)
+
+        class _Mock:
+            def __init__(self):
+                self.y = None
+
+            def fit(self, X, y, **kwargs):
+                self.y = np.asarray(y).ravel()
+                return self
+
+            def predict(self, X):
+                return np.full(len(X), float(np.mean(self.y)))
+
+            def set_params(self, **kwargs):
+                return self
+
+            @property
+            def feature_importances_(self):
+                return np.ones(3)
+
+        model = GradientForecaster(n_estimators=10, random_state=42)
+        model._build_model = lambda n_targets=1: _Mock()
+
+        model.fit(X, y_multi)
+        assert model.predict(X).deterministic.shape == (20, 2)
+
+        model.fit(X, y_single)
+        result = model.predict(X)
+        assert result.deterministic.shape == (20, 1)

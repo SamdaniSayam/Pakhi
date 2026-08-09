@@ -11,7 +11,6 @@ References:
 
 from __future__ import annotations
 
-import math
 from typing import Literal, Sequence
 
 import numpy as np
@@ -65,6 +64,8 @@ def freeze_probability(
         Probability in [0, 1].
     """
     arr = np.asarray(temperature_forecast, dtype=np.float64)
+    if arr.size == 0:
+        return 0.0
     if arr.ndim == 1:
         n_members = max(1, len(arr) // max(window_days, 1))
         n_days = max(1, len(arr) // n_members)
@@ -112,14 +113,15 @@ def heat_index(temperature_celsius: float, relative_humidity: float) -> float:
     T = temperature_celsius
     RH = relative_humidity
 
-    # Steadman simple formula
-    HI_simple = 0.5 * (T + 61.0 + (T - 68.0) * 1.2 + RH * 0.094)
+    # Steadman simple formula (constants are in degrees Fahrenheit).
+    Tf = T * 9.0 / 5.0 + 32.0
+    HI_simple_F = 0.5 * (Tf + 61.0 + (Tf - 68.0) * 1.2 + RH * 0.094)
+    HI_simple = (HI_simple_F - 32.0) * 5.0 / 9.0
 
     if T < 27.0 or RH < 40.0:
         return float(HI_simple)
 
     # Rothfusz regression (T in °F, RH in %)
-    Tf = T * 9.0 / 5.0 + 32.0
     c1 = -42.379
     c2 = 2.04901523
     c3 = 10.14333127
@@ -143,10 +145,7 @@ def heat_index(temperature_celsius: float, relative_humidity: float) -> float:
     )
 
     # Adjustments
-    if RH < 13.0 and 80.0 <= Tf <= 112.0:
-        adjustment = ((13.0 - RH) / 4.0) * math.sqrt((17.0 - abs(Tf - 95.0)) / 17.0)
-        HI_F -= adjustment
-    elif RH > 85.0 and 80.0 <= Tf <= 87.0:
+    if RH > 85.0 and 80.0 <= Tf <= 87.0:
         adjustment = ((RH - 85.0) / 10.0) * ((87.0 - Tf) / 5.0)
         HI_F += adjustment
 
@@ -222,6 +221,8 @@ def growing_degree_days(
            one equation, two interpretations." Agric. For. Meteorol. 87, 291–300.
     """
     arr = np.asarray(temperature, dtype=np.float64)
+    if arr.size == 0:
+        return 0.0
     gdd = np.maximum(0.0, np.minimum(arr, max_celsius) - base)
     return float(np.sum(gdd))
 
@@ -254,6 +255,8 @@ def diurnal_temperature_range(
     """
     tmax = np.asarray(temperature_max, dtype=np.float64)
     tmin = np.asarray(temperature_min, dtype=np.float64)
+    if tmax.size == 0 or tmin.size == 0:
+        return 0.0
     if tmax.shape != tmin.shape:
         raise ValueError("temperature_max and temperature_min must have the same shape")
     return float(np.mean(tmax - tmin))

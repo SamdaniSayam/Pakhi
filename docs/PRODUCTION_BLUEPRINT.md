@@ -30,7 +30,9 @@ This is not bad news. The engineering core (data connectors, feature engineering
 | Risk | `BacktestEngine` with `walk_forward`, `commission_bps`, `slippage_bps`, Sharpe/max-DD/win-rate/profit-factor |
 | Trading | instruments (11), execution, PnL, portfolio |
 | Scheduling | `RefreshScheduler` (in-process) |
-| Quality | 1462 tests, 99.6% coverage, ruff clean, Docker build green, CI green on 3.10–3.13 |
+| Quality | 1462 passed / 5 skipped; 99.63% line coverage (re-verified `coverage.xml`, commit `386350f`); all model modules 98.8–100% covered; ruff clean; CI green on 3.10–3.13 for commits `86b3d80`/`37d9f68`/`386350f` |
+
+**Scope of this evidence (important caveat):** these tests validate that code paths *execute* and that deterministic math is *correct* — e.g., exact known-value checks (`RMSE == √(2/3)` on a hand-computed case, `bias == 2.0`, `MAPE == 7.5`, `ACC ≈ 1.0` on learnable synthetic data, `ACC == 0.0` on the degenerate case), and that models fit and reproduce training data (`RMSE ≈ 0`). This is behavioral, not just instantiation. **But line coverage does not establish that any forecast is *market-useful*.** A model that trains and never generalizes — or a signal that is pure noise on real data — passes every line-coverage gate. That is precisely the gap G0/G1 exist to close, and why §3 sequences alpha validation ahead of all infrastructure spend.
 
 ### 1.3 What Is Missing (the DaaS gap)
 
@@ -124,6 +126,14 @@ Results stored with full provenance (forecast runs used, costs, model versions)
 5. **Postgres/TimescaleDB for signals, object store for raw data, DuckDB/Parquet for backtest staging.**
 6. **Async API (FastAPI) with sync compute in workers** — the existing engine is sync/DataFrame-based; don't rewrite it, isolate it in workers.
 
+### 2.4 The Product Thesis (open-core) — write this down explicitly
+
+The Community Edition — including `pakhi.signals.freeze` and its exact thresholds — is already public on GitHub. Anyone can run Pakhi today. So the DaaS pitch cannot be *"use Pakhi"*; the thesis must be:
+
+> **"The open-source core is the proof. The product is that we run it reliably, on schedule, with provenance and SLAs — so you don't have to."**
+
+Every sales artifact, status page, and pricing page should be tested against that sentence. It is what the first sales call actually hinges on: reliability, freshness, provenance, and operational guarantees over code that a client could theoretically run themselves but shouldn't.
+
 ---
 
 ## 3. THE SEQUENCING DECISION: ALPHA FIRST
@@ -135,7 +145,15 @@ Rationale:
 - The first enterprise meeting will be won or lost on one question: *"Do you have a real, cost-adjusted, out-of-sample track record?"* No API polish answers that.
 - A validated signal (even on one instrument) turns every subsequent engineering hour into de-risked work.
 
-**Decision Gate G0 (end of Phase 1):** If no real instrument shows cost-adjusted, out-of-sample edge above noise after Phase 1, **pivot the product** (reinsure/cat-bond analytics are more forgiving than hedge-fund alpha; or sell as pure data/analytics rather than signals) rather than continuing to build infra.
+**Wedge selection is a founder-led-sales decision, and it is named as such.** The wedge instrument is chosen by *network access* (who can you get a meeting with) rather than by where an edge is statistically most likely to exist. That is a defensible call for a solo founder, but it must be named now so that a G1 pivot reads correctly: a pivot on the chosen wedge means *"this market is already efficient / the entry timing is wrong"* — **not** *"the engineering failed."* Do not let the two narratives blur when the gate arrives; the engineering quality is measured by G0 (infrastructure), the market edge by G1 (alpha).
+
+**Decision Gate G1 (end of Phase 1):** If no real instrument shows cost-adjusted, out-of-sample edge above noise after Phase 1, **pivot the product** (reinsure/cat-bond analytics are more forgiving than hedge-fund alpha; or sell as pure data/analytics rather than signals) rather than continuing to build infra.
+
+**Gate numbering (fixed, matches §5/§7):**
+- **G0 (end of Phase 0, week 4):** infrastructure readiness — the real-data point-in-time pipeline runs and the first walk-forward backtest reproduces honestly (it may refute the synthetic numbers; G0 is not a pivot decision).
+- **G1 (end of Phase 1, week 12):** the actual go/no-go — cost-adjusted out-of-sample Sharpe > 1.0 at adequate sample size, or documented pivot.
+
+G0 asks *"does the test infrastructure work?"* G1 asks *"is there real alpha?"* They are different questions and must not be conflated — the highest-stakes call in the roadmap is G1, and it happens at week 12, not week 4.
 
 ---
 
@@ -144,13 +162,19 @@ Rationale:
 ### WS-0 — Real-Data Foundation (2–4 weeks)
 - Acquire real historical **as-published** GFS archive for the wedge instrument (via `GFSConnector.archive()`; backfill from NOMADS/NCEI; consider ERA5 for training only).
 - Acquire historical **market data** for the wedge (OJ_FUTURES / NG_FUTURES / ERCOT or CME HDD/CDD) — free/cheap sources: CME settlement data, NREL, ISO RTM archives (ERCOT publishes historical DAM prices).
-- Build the **point-in-time aligned dataset**: for each trading day, the forecast run published *before* the market decision, and the realized outcome.
+- **Build continuous contracts with roll adjustment.** OJ, NG, and ERCOT futures expire and roll; a naive splice of front-month prices has phantom jumps at roll dates that are unrelated to the signal and can inflate or wreck a Sharpe ratio. Build back- (ratio-) adjusted continuous series *before* any price feature is computed, and record the roll rule (date, adjustment type, ratio/back-adjustment) per contract in the dataset provenance.
+- **Track data vintage, not just timestamps.** Weather archives get reprocessed and revised after original publication. An archived GFS run fetched today for a past cycle is not automatically bit-for-bit what was available in real time — the classic "vintage" lookahead bug that survives a timestamp-only check. Use the **operational (as-published) archive** for backtests, record the archive version/publication state per cycle, and treat any reanalysis-derived field (ERA5) as training-ground-truth only. Where a true as-published backfill is unavailable for part of the history, mark the vintage explicitly and exclude it from the test window rather than silently mixing.
+- Build the **point-in-time aligned dataset**: for each trading day, the forecast run published *before* the market decision, and the realized outcome — joined to the roll-adjusted continuous contract.
 - Automate re-generation: a script that rebuilds the dataset from raw sources (so results are reproducible).
 
 ### WS-1 — As-Published Backtest Platform (2–4 weeks)
 - Extend `BacktestEngine` to accept point-in-time aligned feature frames from WS-0 (it already supports `commission_bps`/`slippage_bps` and `walk_forward`).
-- Add **provenance logging**: every trade records `forecast_cycle_id`, `publication_ts`, `model_version`, `costs`.
-- Add **no-lookahead guardrails**: automated assertion that no feature at time *t* references data published after the decision cutoff.
+- Add **provenance logging**: every trade records `forecast_cycle_id`, `publication_ts`, `model_version`, `costs`, and the **contract roll state** (which contract month, adjustment factor).
+- Add **no-lookahead guardrails**, in two layers:
+  - *Timestamp layer:* no feature at time *t* references data published after the decision cutoff.
+  - *Vintage layer:* assert the forecast run was fetched from the as-published archive and carry its archive-version hash through the feature frame; fail the backtest if any feature's vintage predates its own timestamp.
+- Add **roll-jump assertion**: no continuous-price move at a roll date larger than X× the daily σ unless driven by a modeled event — catches accidental roll mis-adjustment rather than trading it.
+- **Statistical significance, not point estimates.** Define the G1 sample-size rule now: a Sharpe ratio from a handful of trades is a coin flip. Require a minimum trade count (e.g., ≥ 30 signal-triggered trades) *and* a confidence interval (bootstrap or Sharpe t-statistic) around the estimate before G1 counts it. For rare events (e.g., Florida freeze), this means using multi-year history or explicitly shrinking the edge claim — a Sharpe > 1.0 on 4 trades and on 40 trades must not trigger the same decision.
 - Reproduce the full backtest for the wedge instrument: train on `[train_window]`, walk-forward test on `[test_window]`, with costs.
 
 ### WS-2 — Signal Service (batch precompute + store) (3–4 weeks)
@@ -172,14 +196,17 @@ Rationale:
 - **SDK**: `pakhi-client` Python package wrapping the API (thin, typed, documented).
 - Deployment: single Docker image (extend existing `Dockerfile`), managed VM or ECS/Fly.io.
 
-### WS-4 — Auth, Security, Compliance (weeks 4–8, parallel)
+### WS-4 — Auth, Security, Compliance (weeks 4–8 parallel, SOC2 controls at Phase 3+)
 - **API keys** (hashed at rest) for machine clients + **JWT + RBAC** for human tenants.
 - **Rate limiting** per key/tier (token bucket).
 - **Multi-tenancy**: tenant-scoped rows in the store (tenant_id on every table); tenant isolation tests.
 - **Secrets management** (env-injected via the platform; never in repo).
 - **Audit logs** (who accessed what signal when) — SOC2 control requirement.
 - **TOS + privacy + data-licensing** — engage counsel before first commercial contract.
-- **SOC2 readiness** program: document policies (access control, change management, incident response, backups) from day one so the audit is paperwork, not rework.
+- **SOC2 — timeline is the constraint.** Type II requires controls to have *operated under observation* for a minimum window before certification: **3 months minimum, 6 months recommended, 12 months typical**; a first-time Type II (readiness + gap remediation + observation) commonly totals **9–15 months**. Therefore:
+  - Start the **controls program at the beginning of Phase 3 (week 16)**, not the middle — document policies (access control, change management, incident response, backups) immediately.
+  - **Phase 4 exit = SOC2 Type I** (point-in-time snapshot; no observation window required).
+  - **SOC2 Type II lands in Phase 5 (months 12–18)**, after the observation window has genuinely elapsed. Any sales collateral must claim "SOC2 Type I, Type II in progress" until then — claiming Type II early is a credibility and legal liability.
 
 ### WS-5 — Reliability, Observability, SLAs (weeks 6–10)
 - **Metrics**: Prometheus (request latency, error rate, data-cycle freshness, ingestion lag, signal compute time).
@@ -198,7 +225,7 @@ Rationale:
 
 ### WS-7 — Distribution & GTM (runs parallel, weeks 4–18)
 - **Warm-intro pipeline** for the wedge market (alumni, conferences, quant forums) — the wedge is chosen by who you can meet.
-- **Publish the real backtest** (provenance-disclosed) once WS-1 clears G0 — this is the marketing asset.
+- **Publish the real backtest** (provenance-disclosed) once WS-1 clears G1 — this is the marketing asset.
 - **Live paper trading** with public performance tracking (Sharpe, max-DD, BSS vs baseline).
 - **Case-study package**: reproducible repo, data provenance, methodology — the technical resume.
 
@@ -221,7 +248,7 @@ Rationale:
 - [ ] CME HDD/CDD signal evaluated as alternate wedge
 - [ ] Live paper-trading harness (60 days of live-published signals, tracked with costs)
 - [ ] Publish honest results (or honest pivot) — the marketing asset
-- **Exit:** cost-adjusted out-of-sample Sharpe > 1.0 (or explicit, documented pivot).
+- **Exit:** cost-adjusted out-of-sample Sharpe > 1.0 **at adequate sample size (≥ ~30 trades + CI)** — or explicit, documented pivot.
 
 ### Phase 2 — Productized Core API (Weeks 8–16)
 **Goal:** a credible single-tenant live API for trial customers.
@@ -236,20 +263,28 @@ Rationale:
 ### Phase 3 — Enterprise Hardening (Weeks 16–32)
 **Goal:** industry-standard reliability, security, tenancy, billing.
 - [ ] WS-3: WebSocket live streams; backtest-as-a-service job queue
-- [ ] WS-4: RBAC + multi-tenancy + audit logs + SOC2 controls program
+- [ ] WS-4: RBAC + multi-tenancy + audit logs + **SOC2 controls program starts at the beginning of this phase** (policies, access control, change management, incident response — operational from week 16 so the observation window starts counting)
 - [ ] WS-5: Prometheus/Grafana, SLOs, status page, DR drills
 - [ ] WS-6: metering + Stripe billing + trial automation + support SLA
 - [ ] Load/soak tests; API contract tests; canary deploys
-- **Exit:** 99.9% uptime over 30 days; first 1–2 paid enterprise contracts live.
+- **Exit:** 99.9% uptime over 30 days; first 1–2 paid enterprise contracts live; SOC2 controls operational and being observed.
 
 ### Phase 4 — Scale & Expansion (Months 8–12)
 **Goal:** widen moat and expand instruments.
 - [ ] Ag/cat-bond signal coverage (Soybeans, Corn, Wheat, CAT bonds)
 - [ ] Deep-learning models (Transformer/GNN) **only after** out-of-sample skill over baselines
 - [ ] Dedicated single-tenant instances (Tier 3)
-- [ ] SOC2 Type II audit; public status + compliance page
+- [ ] **SOC2 Type I report completed** (point-in-time snapshot; observation window for Type II continues through this phase)
 - [ ] Scale: auto-scaling API, multi-region if latency demands
-- **Exit:** multi-instrument platform, SOC2 Type II, repeatable sales motion.
+- **Exit:** multi-instrument platform, SOC2 Type I (Type II observation window running), repeatable sales motion.
+
+### Phase 5 — Certification & Institutionalization (Months 12–18)
+**Goal:** close the compliance loop and institutionalize operations.
+- [ ] **SOC2 Type II** completed after the observation window has genuinely elapsed (≥ 3 months of operated controls, 6 recommended — first-time Type II typically runs 9–15 months end-to-end)
+- [ ] Public compliance page + status page; SOC2 badge in sales collateral
+- [ ] GDPR/CCPA posture finalized; data-licensing compliance documented
+- [ ] Enterprise tier (Tier 3) with dedicated instances and custom models
+- **Exit:** SOC2 Type II; industry-standard compliance posture; churn < 2%.
 
 ---
 
@@ -278,7 +313,7 @@ A weather-data vendor at industry standard demonstrates all of the following. Tr
 **Security & Compliance**
 - [ ] AuthN/AuthZ (API keys hashed, JWT+RBAC), TLS everywhere
 - [ ] Rate limiting per tier; audit logs; secrets management
-- [ ] SOC2 Type II; GDPR/CCPA posture; data-licensing compliance
+- [ ] SOC2 Type I (Phase 4) → Type II (months 12–18) with genuine observation window; GDPR/CCPA posture; data-licensing compliance
 - [ ] Incident response runbook; backup/restore drills
 
 **Business Operations**
@@ -297,11 +332,12 @@ A weather-data vendor at industry standard demonstrates all of the following. Tr
 
 | Gate | When | Criteria |
 |---|---|---|
-| **G0** | End of Phase 0 | Real-data walk-forward backtest reproduces (or refutes) synthetic results |
-| **G1** | End of Phase 1 | Cost-adjusted out-of-sample Sharpe > 1.0 on wedge instrument, OR documented pivot |
+| **G0** | End of Phase 0 | Real-data walk-forward backtest reproduces (or refutes) synthetic results — infrastructure readiness, *not* a pivot decision |
+| **G1** | End of Phase 1 | Cost-adjusted out-of-sample Sharpe > 1.0 **at adequate sample size (≥ ~30 trades + confidence interval)** on wedge instrument, OR documented pivot |
 | **G2** | End of Phase 2 | Live API serving real signals ≥ 30 days, first 14-day trials active |
-| **G3** | End of Phase 3 | 99.9% uptime/30 days; 1–2 paid enterprise contracts; SOC2 controls in place |
-| **G4** | End of Phase 4 | Multi-instrument; SOC2 Type II; repeatable sales motion; churn < 2% |
+| **G3** | End of Phase 3 | 99.9% uptime/30 days; 1–2 paid enterprise contracts; SOC2 controls operational and being observed |
+| **G4** | End of Phase 4 | Multi-instrument; SOC2 Type I completed, Type II observation running; repeatable sales motion; churn < 2% |
+| **G5** | End of Phase 5 (m 12–18) | SOC2 Type II completed after genuine observation window; enterprise tier live |
 
 ## 8. RISKS & MITIGATIONS
 
@@ -310,9 +346,11 @@ A weather-data vendor at industry standard demonstrates all of the following. Tr
 | No real alpha on first wedge | High | G0/G1 gates; pivot to cat-bond/reinsurance analytics (more forgiving) or pure data/analytics |
 | Data licensing costs for market data | Medium | Start with free/official sources (CME settlements, ERCOT archives, NREL); license later |
 | Scope creep (satellite, ag, all instruments) | High | Single wedge until G3; every instrument must clear G1-style validation |
-| Solo-founder load (eng + sales + legal) | High | Defer SOC2 audit to Phase 4; use managed services; consider a technical co-founder or part-time contractor at Phase 3 |
-| Lookahead-bias skepticism from quants | Medium | Provenance + no-lookahead assertion in CI + disclosed methodology; the "as-published" story is our credibility |
+| Solo-founder load (eng + sales + legal) | High | Defer SOC2 Type II to Phase 5 (m 12–18); use managed services; consider a technical co-founder or part-time contractor at Phase 3 |
+| Lookahead-bias skepticism from quants | Medium | Provenance + two-layer no-lookahead assertion (timestamp *and* vintage) in CI + roll-adjusted contracts + disclosed methodology; the "as-published" story is our credibility |
 | API latency expectations | Medium | Precompute architecture makes reads sub-second by design |
+| Futures roll artifacts corrupt backtests | Medium | Continuous back-/ratio-adjusted contracts in WS-0; roll-jump assertion in WS-1 |
+| Rare-event signals too few trades to trust Sharpe | High | G1 sample-size rule (≥ ~30 trades + CI); multi-year history for freeze-type events; shrink edge claims otherwise |
 
 ## 9. IMMEDIATE 30-DAY ACTION PLAN
 
@@ -320,6 +358,8 @@ A weather-data vendor at industry standard demonstrates all of the following. Tr
 2. **Week 1–2:** Backfill as-published GFS archive + market prices; build the point-in-time aligned dataset script (WS-0).
 3. **Week 2–3:** Wire point-in-time frames into `BacktestEngine` with costs; add no-lookahead assertions (WS-1).
 4. **Week 3–4:** Run the first real walk-forward backtest. Record every trade with provenance.
-5. **Week 4:** Decision Gate G0 — report honestly: is there signal? Then proceed (or pivot) accordingly.
+5. **Week 4:** Decision Gate **G0** — confirm the point-in-time pipeline runs and the first real backtest is reproducible (honest result, whatever it says). This is *not* the pivot decision; **G1** at week 12 is.
+6. **Weeks 5–12:** iterate features/models on the wedge instrument; grow the as-published backtest. 
+7. **Week 12:** Decision Gate **G1** — cost-adjusted out-of-sample Sharpe > 1.0 at adequate sample size, or documented pivot.
 
 **Do not build the API before G1. The backtest is the product until proven otherwise.**

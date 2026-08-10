@@ -34,11 +34,13 @@ def main() -> None:
     px = adj.set_index("Date")["close_adj"].sort_index()
     ojd = px.resample("D").last().ffill()
 
-    files = sorted(GFS.glob("gfs_*_12z_f000.parquet"))
+    files = sorted(GFS.glob("gfs_*_12z_f000*.parquet"))
     rows = []
     for f in files:
         cycle_date = pd.Timestamp(f.name.split("_")[1])
-        frame = pd.read_parquet(f)
+        prefix = f.name.rsplit("f000", 1)[0]
+        leads = sorted(GFS.glob(prefix + "f*.parquet"))
+        frame = pd.concat([pd.read_parquet(p) for p in leads], ignore_index=True)
         feats = freeze_features(frame)
         nxt = ojd.index[ojd.index > cycle_date]
         if nxt.empty:

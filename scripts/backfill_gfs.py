@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -20,12 +19,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pakhi.src.noaa import GFSConnector  # noqa: E402
+from pakhi.src.noaa import GFSConnector
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ws0.backfill")
 
-FLORIDA_BBOX = [-84.0, 25.0, -80.0, 30.0]
+FLORIDA_BBOX = [-85.0, 24.0, -80.0, 31.0]  # wide FL: captures north-FL hard freezes
 WS0_VARIABLES = [
     "temperature_2m",
     "wind_10m",
@@ -36,9 +35,14 @@ WS0_VARIABLES = [
 ]
 
 
+def _bbox_tag(bbox: list[float]) -> str:
+    return f"W{bbox[1]:g}S{bbox[0]:g}E{bbox[3]:g}N{bbox[2]:g}".replace(".", "_")
+
+
 def _work(args: tuple) -> dict | None:
     date_str, cycle_str, lead, bbox, resolution, variables, out = args
-    parquet = Path(out) / f"gfs_{date_str}_{cycle_str}z_f{lead:03d}.parquet"
+    tag = _bbox_tag(bbox)
+    parquet = Path(out) / f"gfs_{date_str}_{cycle_str}z_f{lead:03d}_{tag}.parquet"
     if parquet.exists() and parquet.stat().st_size > 0:
         return None
     conn = GFSConnector(
@@ -62,6 +66,7 @@ def _work(args: tuple) -> dict | None:
             "date": date_str,
             "cycle": cycle_str,
             "lead": lead,
+            "file": parquet.name,
             "source": "aws",
             "vars": ",".join(sorted(ds.data_vars)),
             "grid_lat": ds.sizes.get("latitude", 0),
@@ -71,7 +76,7 @@ def _work(args: tuple) -> dict | None:
         }
     except Exception as exc:
         logger.warning("MISS %s %sZ f%03d — %s", date_str, cycle_str, lead, exc)
-        return {"date": date_str, "cycle": cycle_str, "lead": lead, "source": "MISS", "nbytes": 0}
+        return {"date": date_str, "cycle": cycle_str, "lead": lead, "file": "", "source": "MISS", "nbytes": 0}
     finally:
         conn.close()
 
@@ -97,10 +102,14 @@ def main() -> None:
     inventory_path = Path(args.inventory)
 
     dates = pd.date_range(args.start, args.end, freq="D")
-    jobs = [(d.strftime("%Y%m%d"), c, l, bbox, args.resolution, WS0_VARIABLES, str(out))
-            for d in dates for c in cycles for l in leads]
+    jobs = [(d.strftime("%Y%m%d"), c, lead, bbox, args.resolution, WS0_VARIABLES, str(out))
+            for d in dates for c in cycles for lead in leads]
     existing = {f.name for f in out.glob("gfs_*.parquet")}
-    jobs = [j for j in jobs if f"gfs_{j[0]}_{j[1]}z_f{j[2]:03d}.parquet" not in existing]
+    jobs = [
+        j
+        for j in jobs
+        if f"gfs_{j[0]}_{j[1]}z_f{j[2]:03d}_{_bbox_tag(bbox)}.parquet" not in existing
+    ]
     total = len(jobs)
     logger.info("Jobs to fetch: %d (skipping %d existing parquets)", total, len(existing))
 

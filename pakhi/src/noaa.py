@@ -30,87 +30,63 @@ NOMADS_GFS_URL = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_{res}.pl"
 
 GFS_VARIABLE_MAP: dict[str, dict[str, Any]] = {
     "temperature_2m": {
-        "file": "t2m",
-        "lev": None,
         "var": "TMP",
-        "level": "surface",
+        "lev": "2 m above ground",
         "shortName": "2t",
     },
     "wind_10m": {
-        "file": "u10/v10",
-        "lev": None,
         "var": "UGRD:VGRD",
-        "level": "10 m above ground",
+        "lev": "10 m above ground",
         "shortName": "10u",
     },
     "wind_10m_u": {
-        "file": "u10",
-        "lev": None,
         "var": "UGRD",
-        "level": "10 m above ground",
+        "lev": "10 m above ground",
         "shortName": "10u",
     },
     "wind_10m_v": {
-        "file": "v10",
-        "lev": None,
         "var": "VGRD",
-        "level": "10 m above ground",
+        "lev": "10 m above ground",
         "shortName": "10v",
     },
     "precipitation": {
-        "file": "apcp",
-        "lev": None,
-        "var": "APCP",
-        "level": "surface",
-        "shortName": "tp",
+        "var": "PRATE",
+        "lev": "surface",
+        "shortName": "prate",
     },
     "msl_pressure": {
-        "file": "mslet",
-        "lev": None,
         "var": "MSLET",
-        "level": "mean sea level",
+        "lev": "mean sea level",
         "shortName": "msl",
     },
     "geopotential_500": {
-        "file": "hgt",
-        "lev": "500 mb",
         "var": "HGT",
-        "level": "500 mb",
+        "lev": "500 mb",
         "shortName": "z",
     },
     "humidity": {
-        "file": "rh",
-        "lev": "2_m_above_ground",
         "var": "RH",
-        "level": "2 m above ground",
+        "lev": "2 m above ground",
         "shortName": "r",
     },
     "specific_humidity": {
-        "file": "sh",
-        "lev": "2_m_above_ground",
         "var": "SPFH",
-        "level": "2 m above ground",
+        "lev": "2 m above ground",
         "shortName": "q",
     },
     "temperature_850": {
-        "file": "t850",
-        "lev": "850 mb",
         "var": "TMP",
-        "level": "850 mb",
+        "lev": "850 mb",
         "shortName": "t",
     },
     "temperature_500": {
-        "file": "t500",
-        "lev": "500 mb",
         "var": "TMP",
-        "level": "500 mb",
+        "lev": "500 mb",
         "shortName": "t",
     },
     "wind_250": {
-        "file": "u250/v250",
-        "lev": "250 mb",
         "var": "UGRD:VGRD",
-        "level": "250 mb",
+        "lev": "250 mb",
         "shortName": "u",
     },
 }
@@ -202,7 +178,12 @@ class GFSConnector:
         forecast_hour: int,
         var_cfg: dict[str, Any],
     ) -> str:
-        """Build the NOMADS filter URL for a single GRIB2 variable."""
+        """Build the NOMADS filter URL for a single GRIB2 variable.
+
+        NOMADS filter_gfs_{res}.pl (v1.2) expects checkbox-style parameters:
+        ``var_<ABBREV>=on`` and ``lev_<level>=on``. The ``subregion`` parameter
+        must be present (even when empty) to activate the bounding-box subset.
+        """
         params: dict[str, str] = {
             "file": f"gfs.t{cycle}z.pgrb2.{self.resolution}.f{forecast_hour:03d}",
             "dir": f"/gfs.{date}/{cycle}/atmos",
@@ -214,12 +195,14 @@ class GFSConnector:
         params["toplat"] = str(n)
         params["bottomlat"] = str(s)
 
-        params["var"] = var_cfg["var"]
-        if var_cfg["lev"] is not None:
-            params["lev"] = var_cfg["lev"]
+        for var in var_cfg["var"].split(":"):
+            params[f"var_{var}"] = "on"
+        lev = var_cfg.get("lev")
+        if lev:
+            params[f"lev_{lev.replace(' ', '_')}"] = "on"
 
         url = NOMADS_GFS_URL.format(res=self.resolution)
-        query_parts = [f"{k}={v}" for k, v in params.items() if v != ""]
+        query_parts = [f"{k}={v}" for k, v in params.items()]
         return url + "?" + "&".join(query_parts)
 
     def _download_with_retry(self, url: str, dest: Path) -> Path:

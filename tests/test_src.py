@@ -103,7 +103,9 @@ class TestGFSConnector:
         var_cfg = GFS_VARIABLE_MAP["temperature_2m"]
         url = conn._build_url("20230615", "00", 0, var_cfg)
         assert "gfs.t00z" in url
-        assert "var=TMP" in url
+        assert "var_TMP=on" in url
+        assert "lev_2_m_above_ground=on" in url
+        assert "subregion=" in url
 
     def test_context_manager(self):
         with GFSConnector() as conn:

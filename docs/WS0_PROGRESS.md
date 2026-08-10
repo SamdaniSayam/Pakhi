@@ -83,6 +83,30 @@ and the user is shown the running terminal live.
   Build script: `scripts/build_continuous.py`.
 - Full suite: **1474 passed / 5 skipped**; ruff clean.
 
+### 2026-08-11 — T4 partial + T1 exit-criterion pre-check
+- **`pakhi/ws0/features.py`** (tested): GFS grid → FreezeSignal `forecast` dict —
+  `temperature_min` (min t2m °C), `freeze_prob` (fraction of (cell × lead) with
+  t2m<0°C within 48h of publish), `event_peak_time`, point-in-time `current_time`
+  (= 12Z run start + 3.5h publish latency).
+- **`scripts/build_pit.py`**: aligns each 12Z cycle with the **next-trading-day**
+  OJ outcome (decision cutoff = publish time). `data/ws0/freeze_pit.parquet`.
+- **`scripts/eval_freeze_signal.py`** (T1 exit criterion): runs the real
+  `FreezeSignal` over the PIT frame.
+- **Honest findings (G0 pre-check), all from real as-published GFS + OJ data:**
+  - Jan-2022: coldest FL-bbox 12Z f024 forecast was **+0.7°C (Jan 22)**; the
+    Jan 29–30 freeze week saw OJ **fall 8.6%** (161.6→147.6). No freeze→spike.
+  - Jul-2025 (+12.9%/+11.6% days): FL t2m **+23.9°C**, zero freeze cells. Not
+    freeze-driven (Brazil crop).
+  - Apr-2025 (+43.6% in 5d): FL t2m +10–14°C, zero freeze cells. Not freeze-driven.
+  - **VERDICT so far: REFUTED-dormant** — across 117 PIT days (2021-11→2022-02)
+    `freeze_prob` maxes at 0.131 (< 0.6 entry), so FreezeSignal fires **0 LONGs**;
+    all large OJ moves had zero freeze forecast. The "15–40% OJ spike within 48h
+    of freeze" docstring claim is **not** a tradable rule on this real PIT data.
+    (Caveat: bbox [-84,25,-80,30] may miss north-FL hard freezes; full 5-season
+    verdict after backfill completes.)
+- Raw OJ=F re-pulled from 2015 (was 2022-12) → continuous + PIT now cover the
+  2021-22 season. Suite: **1480 passed / 5 skipped**.
+
 ## Status board
 
 | Task | Status | Notes |
@@ -91,6 +115,7 @@ and the user is shown the running terminal live.
 | T1 Weather layer | **running** | full backfill in background (~11h); byte-range proven |
 | T2 Market layer | **DONE** | Yahoo parquets + ICE-verified roll calendar |
 | T3 Continuous contracts | **DONE** | roll.py + provenance; 22 rolls back-adjusted, 1 real event flagged |
+| T4 PIT dataset | **building** | features.py + PIT builder + eval script live; pre-check: signal REFUTED-dormant so far |
 | T4 PIT dataset | pending | |
 | T5 Reproducibility + DQ | pending | |
 | T6 G0 handoff | pending | |

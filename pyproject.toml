@@ -79,10 +79,10 @@ all = [
 pakhi = "pakhi.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/SamdaniSayam/pakhi"
-Documentation = "https://github.com/SamdaniSayam/pakhi#readme"
-Repository = "https://github.com/SamdaniSayam/pakhi"
-"Bug Tracker" = "https://github.com/SamdaniSayam/pakhi/issues"
+Homepage = "https://github.com/SamdaniSayam/Pakhi"
+Documentation = "https://github.com/SamdaniSayam/Pakhi#readme"
+Repository = "https://github.com/SamdaniSayam/Pakhi"
+"Bug Tracker" = "https://github.com/SamdaniSayam/Pakhi/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

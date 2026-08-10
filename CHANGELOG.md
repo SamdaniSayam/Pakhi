@@ -56,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Visualization** — Geographic forecast maps, time series plots, ensemble plume diagrams, terminal dashboard
 - **CLI** — `pakhi forecast`, `pakhi signal`, `pakhi status`, `pakhi backtest`
 - **Docker** — Multi-stage Dockerfile, docker-compose, health checks
-- **CI/CD** — GitHub Actions: lint (ruff), test (Python 3.10–3.13), Docker build, PyPI publish
+- **CI/CD** — GitHub Actions: lint (ruff), test (Python 3.10–3.13), Docker build
 - **Developer Experience** — Makefile, pre-commit hooks, ruff config, coverage reporting
 - **5 example scripts** — All runnable with synthetic data, no API keys needed
 - **224 tests** — Comprehensive coverage across all modules

@@ -15,6 +15,20 @@ import pytest
 import xarray as xr
 
 
+def _pop_real_zarr() -> object:
+    """Pop the real zarr module from sys.modules, loading it first if needed.
+
+    Older dependency sets do not import zarr until ``fetch_zarr`` does, so it
+    may be absent from sys.modules at test time.
+    """
+    real = sys.modules.pop("zarr", None)
+    if real is None:
+        importlib.import_module("zarr")
+
+        real = sys.modules.pop("zarr")
+    return real
+
+
 # ── era5.py (41 miss) ───────────────────────────────────────────────
 class TestERA5Coverage:
     """Cover era5.py lines 169, 177-185, 298-300, 312-314, 321, 375, 384-438."""
@@ -117,7 +131,7 @@ class TestERA5Coverage:
         conn.timeout = 60
         times = pd.date_range("2024-01-01", periods=2, freq="D")
         fake_ds = xr.Dataset({"temperature_2m": ("time", [280.0, 281.0])}, coords={"time": times})
-        real_zarr = sys.modules.pop("zarr")
+        real_zarr = _pop_real_zarr()
         sys.modules["zarr"] = MagicMock()
         sys.modules["gcsfs"] = MagicMock()
         try:
@@ -133,7 +147,7 @@ class TestERA5Coverage:
 
         conn = ERA5Connector.__new__(ERA5Connector)
         conn.variables = ["temperature_2m"]
-        original = sys.modules.pop("zarr")
+        original = _pop_real_zarr()
         try:
             sys.modules["zarr"] = None
             with pytest.raises(ImportError, match="zarr"):
@@ -146,7 +160,7 @@ class TestERA5Coverage:
 
         conn = ERA5Connector.__new__(ERA5Connector)
         conn.variables = ["nonexistent_var_xyz"]
-        real_zarr = sys.modules.pop("zarr")
+        real_zarr = _pop_real_zarr()
         sys.modules["zarr"] = MagicMock()
         sys.modules["gcsfs"] = MagicMock()
         try:
@@ -161,7 +175,7 @@ class TestERA5Coverage:
 
         conn = ERA5Connector.__new__(ERA5Connector)
         conn.variables = ["temperature_2m"]
-        real_zarr = sys.modules.pop("zarr")
+        real_zarr = _pop_real_zarr()
         mock_zarr = MagicMock()
         mock_zarr.storage.GCSStore.side_effect = RuntimeError("GCS error")
         sys.modules["zarr"] = mock_zarr
@@ -187,7 +201,7 @@ class TestERA5Coverage:
             call_count[0] += 1
             return ds1 if call_count[0] == 1 else ds2
 
-        real_zarr = sys.modules.pop("zarr")
+        real_zarr = _pop_real_zarr()
         sys.modules["zarr"] = MagicMock()
         sys.modules["gcsfs"] = MagicMock()
         try:
@@ -205,7 +219,7 @@ class TestERA5Coverage:
         conn.variables = ["temperature_2m"]
         times = pd.date_range("2024-01-01", periods=1, freq="D")
         ds1 = xr.Dataset({"temperature_2m": ("time", [280.0])}, coords={"time": times})
-        real_zarr = sys.modules.pop("zarr")
+        real_zarr = _pop_real_zarr()
         sys.modules["zarr"] = MagicMock()
         sys.modules["gcsfs"] = MagicMock()
         try:

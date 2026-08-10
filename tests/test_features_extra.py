@@ -1,4 +1,5 @@
 """Tests for pakhi.features — spatial, teleconnection, satellite, temporal, climate, anomaly."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -6,20 +7,21 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+from pakhi.features.anomaly import AnomalyFeatures
+from pakhi.features.climate import ClimateFeatures
+from pakhi.features.satellite import SatelliteFeatures
 from pakhi.features.spatial import SpatialFeatures
 from pakhi.features.teleconnection import TeleconnectionIndices
-from pakhi.features.satellite import SatelliteFeatures
 from pakhi.features.temporal import TemporalFeatures
-from pakhi.features.climate import ClimateFeatures
-from pakhi.features.anomaly import AnomalyFeatures
 
 
 def _make_grid_2d(n_lat=10, n_lon=10):
     lats = np.linspace(30, 35, n_lat)
     lons = np.linspace(-90, -85, n_lon)
     data = np.random.randn(n_lat, n_lon)
-    return xr.DataArray(data, dims=["latitude", "longitude"],
-                        coords={"latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+    )
 
 
 def _make_grid_3d(n_time=5, n_lat=10, n_lon=10):
@@ -27,8 +29,11 @@ def _make_grid_3d(n_time=5, n_lat=10, n_lon=10):
     lons = np.linspace(-90, -85, n_lon)
     times = np.arange(n_time)
     data = np.random.randn(n_time, n_lat, n_lon)
-    return xr.DataArray(data, dims=["time", "latitude", "longitude"],
-                        coords={"time": times, "latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data,
+        dims=["time", "latitude", "longitude"],
+        coords={"time": times, "latitude": lats, "longitude": lons},
+    )
 
 
 def _make_sst_3d():
@@ -36,8 +41,11 @@ def _make_sst_3d():
     lons = np.linspace(-170, -120, 5)
     times = pd.date_range("2020-01-01", periods=12, freq="MS")
     data = np.random.randn(12, 5, 5) + 280
-    return xr.DataArray(data, dims=["time", "latitude", "longitude"],
-                        coords={"time": times, "latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data,
+        dims=["time", "latitude", "longitude"],
+        coords={"time": times, "latitude": lats, "longitude": lons},
+    )
 
 
 def _make_series(n=100):
@@ -70,12 +78,20 @@ class TestSpatial:
     def test_convergence(self):
         lats = np.linspace(30, 35, 10)
         lons = np.linspace(-90, -85, 10)
-        ds = xr.Dataset({
-            "u": xr.DataArray(np.random.randn(10, 10), dims=["latitude", "longitude"],
-                              coords={"latitude": lats, "longitude": lons}),
-            "v": xr.DataArray(np.random.randn(10, 10), dims=["latitude", "longitude"],
-                              coords={"latitude": lats, "longitude": lons}),
-        })
+        ds = xr.Dataset(
+            {
+                "u": xr.DataArray(
+                    np.random.randn(10, 10),
+                    dims=["latitude", "longitude"],
+                    coords={"latitude": lats, "longitude": lons},
+                ),
+                "v": xr.DataArray(
+                    np.random.randn(10, 10),
+                    dims=["latitude", "longitude"],
+                    coords={"latitude": lats, "longitude": lons},
+                ),
+            }
+        )
         result = SpatialFeatures.convergence(ds)
         assert "convergence" in result
         assert "divergence" in result
@@ -101,9 +117,11 @@ class TestTeleconnection:
         lats = np.linspace(30, 70, 10)
         lons = np.linspace(-25, -15, 5)
         times = pd.date_range("2020-01-01", periods=12, freq="MS")
-        slp = xr.DataArray(np.random.randn(12, 10, 5) * 10 + 1013,
-                           dims=["time", "latitude", "longitude"],
-                           coords={"time": times, "latitude": lats, "longitude": lons})
+        slp = xr.DataArray(
+            np.random.randn(12, 10, 5) * 10 + 1013,
+            dims=["time", "latitude", "longitude"],
+            coords={"time": times, "latitude": lats, "longitude": lons},
+        )
         result = TeleconnectionIndices.compute_nao(slp)
         assert result is not None
 
@@ -111,9 +129,11 @@ class TestTeleconnection:
         lats = np.linspace(25, 55, 10)
         lons = np.linspace(-165, -120, 10)
         times = pd.date_range("2020-01-01", periods=12, freq="MS")
-        sst = xr.DataArray(np.random.randn(12, 10, 10) + 280,
-                           dims=["time", "latitude", "longitude"],
-                           coords={"time": times, "latitude": lats, "longitude": lons})
+        sst = xr.DataArray(
+            np.random.randn(12, 10, 10) + 280,
+            dims=["time", "latitude", "longitude"],
+            coords={"time": times, "latitude": lats, "longitude": lons},
+        )
         result = TeleconnectionIndices.computepdo(sst)
         assert result is not None
 
@@ -121,9 +141,11 @@ class TestTeleconnection:
         lats = np.linspace(-5, 5, 5)
         lons = np.linspace(60, 170, 10)
         times = pd.date_range("2020-01-01", periods=50, freq="D")
-        olr = xr.DataArray(np.random.randn(50, 5, 10) + 250,
-                           dims=["time", "latitude", "longitude"],
-                           coords={"time": times, "latitude": lats, "longitude": lons})
+        olr = xr.DataArray(
+            np.random.randn(50, 5, 10) + 250,
+            dims=["time", "latitude", "longitude"],
+            coords={"time": times, "latitude": lats, "longitude": lons},
+        )
         result = TeleconnectionIndices.compute_mjo(olr)
         assert "rmm1" in result
 
@@ -149,23 +171,24 @@ class TestSatelliteFeatures:
         assert 0.0 <= result <= 1.0
 
     def test_cloud_fraction_xr(self):
-        da = xr.DataArray(np.random.uniform(200, 300, (10, 10)),
-                          dims=["latitude", "longitude"])
+        da = xr.DataArray(np.random.uniform(200, 300, (10, 10)), dims=["latitude", "longitude"])
         result = SatelliteFeatures.cloud_fraction(da)
         assert 0.0 <= float(result) <= 1.0
 
     def test_cloud_motion_vectors(self):
         data = np.random.randn(3, 20, 20)
-        result = SatelliteFeatures.cloud_motion_vectors(data, time_delta_minutes=15.0,
-                                                        search_window=2)
+        result = SatelliteFeatures.cloud_motion_vectors(
+            data, time_delta_minutes=15.0, search_window=2
+        )
         assert "u_wind" in result
 
 
 class TestTemporal:
     def test_build_pandas(self):
         tf = TemporalFeatures(lags=[1, 3], windows=[6])
-        df = pd.DataFrame({"temp": np.random.randn(100)},
-                          index=pd.date_range("2020-01-01", periods=100, freq="h"))
+        df = pd.DataFrame(
+            {"temp": np.random.randn(100)}, index=pd.date_range("2020-01-01", periods=100, freq="h")
+        )
         result = tf.build(df)
         assert result.shape[1] > 1
 
@@ -178,33 +201,38 @@ class TestTemporal:
     def test_build_xarray(self):
         tf = TemporalFeatures(lags=[1], windows=[6])
         times = np.arange(100)
-        ds = xr.Dataset({
-            "temp": xr.DataArray(np.random.randn(100), dims=["time"],
-                                 coords={"time": times}),
-        })
+        ds = xr.Dataset(
+            {
+                "temp": xr.DataArray(np.random.randn(100), dims=["time"], coords={"time": times}),
+            }
+        )
         result = tf.build(ds)
         assert len(result.data_vars) > 1
 
     def test_custom_stats(self):
         tf = TemporalFeatures(lags=[1], windows=[6], stats=["mean", "ema"])
-        df = pd.DataFrame({"x": np.random.randn(100)},
-                          index=pd.date_range("2020-01-01", periods=100, freq="h"))
+        df = pd.DataFrame(
+            {"x": np.random.randn(100)}, index=pd.date_range("2020-01-01", periods=100, freq="h")
+        )
         result = tf.build(df)
         assert result.shape[1] > 1
 
     def test_build_short_pandas_df(self):
         # Series shorter than the default windows must not crash
         # (triples-sigfast rolling_average raises if len < window).
-        df = pd.DataFrame({"t": np.linspace(20.0, 30.0, 10)},
-                          index=pd.date_range("2020-01-01", periods=10, freq="h"))
+        df = pd.DataFrame(
+            {"t": np.linspace(20.0, 30.0, 10)},
+            index=pd.date_range("2020-01-01", periods=10, freq="h"),
+        )
         result = TemporalFeatures().build(df)
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 10
         assert "t_lag_1" in result.columns
 
     def test_build_short_series(self):
-        s = pd.Series(np.linspace(20.0, 30.0, 10),
-                      index=pd.date_range("2020-01-01", periods=10, freq="h"))
+        s = pd.Series(
+            np.linspace(20.0, 30.0, 10), index=pd.date_range("2020-01-01", periods=10, freq="h")
+        )
         result = TemporalFeatures().build(s)
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 10
@@ -218,8 +246,9 @@ class TestTemporal:
         assert len(result.data_vars) > 1
 
     def test_long_series_keeps_full_windows(self):
-        df = pd.DataFrame({"t": np.random.randn(300)},
-                          index=pd.date_range("2020-01-01", periods=300, freq="h"))
+        df = pd.DataFrame(
+            {"t": np.random.randn(300)}, index=pd.date_range("2020-01-01", periods=300, freq="h")
+        )
         result = TemporalFeatures().build(df)
         assert "t_rollmean_168" in result.columns
         assert "t_rolling_168" in result.columns
@@ -251,16 +280,16 @@ class TestClimate:
 
     def test_frost_days(self):
         result = ClimateFeatures.frost_days(np.array([-2.0, 5.0, 0.0]))
-        assert result[0] == True
-        assert result[1] == False
-        assert result[2] == True
+        assert result[0]
+        assert not result[1]
+        assert result[2]
 
     def test_heatwave_days(self):
         temps = np.array([36, 37, 38, 36, 30])
         result = ClimateFeatures.heatwave_days(temps, threshold_celsius=35.0, consecutive_days=3)
-        assert result[0] == True
-        assert result[1] == True
-        assert result[2] == True
+        assert result[0]
+        assert result[1]
+        assert result[2]
 
 
 class TestAnomaly:
@@ -272,8 +301,7 @@ class TestAnomaly:
         assert np.all(result > 0)
 
     def test_zscore_zero_std(self):
-        result = AnomalyFeatures.zscore_anomaly(
-            np.array([1.0]), np.array([0.0]), np.array([0.0]))
+        result = AnomalyFeatures.zscore_anomaly(np.array([1.0]), np.array([0.0]), np.array([0.0]))
         assert np.isnan(result[0])
 
     def test_percentile_rank(self):

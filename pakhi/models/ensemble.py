@@ -142,12 +142,12 @@ class EnsembleForecaster(BaseModel):
         if y_val_2d.shape[1] != n_targets:
             raise ValueError("Target shape mismatch in stacking.")
 
-        meta_X = stacked.transpose(1, 0, 2).reshape(n_samples, -1) # (n, m*t)
+        meta_X = stacked.transpose(1, 0, 2).reshape(n_samples, -1)  # (n, m*t)
 
         # Ridge regression: (X^T X + αI)^{-1} X^T y
         XtX = meta_X.T @ meta_X + self.meta_alpha * np.eye(meta_X.shape[1])
         Xty = meta_X.T @ y_val_2d
-        self._meta_coefs = np.linalg.solve(XtX, Xty) # (m*t, t)
+        self._meta_coefs = np.linalg.solve(XtX, Xty)  # (m*t, t)
         self._meta_intercept = np.mean(y_val_2d, axis=0) - meta_X.mean(axis=0) @ self._meta_coefs
 
     # ------------------------------------------------------------------
@@ -220,7 +220,7 @@ class EnsembleForecaster(BaseModel):
             if meta_X.shape[1] < self._meta_coefs.shape[0]:
                 pad = np.zeros((n_samples, self._meta_coefs.shape[0] - meta_X.shape[1]))
                 meta_X = np.concatenate([meta_X, pad], axis=1)
-            det = (meta_X @ self._meta_coefs + self._meta_intercept) # (n, t)
+            det = meta_X @ self._meta_coefs + self._meta_intercept  # (n, t)
         else:
             w = self._weights
             if w is None:

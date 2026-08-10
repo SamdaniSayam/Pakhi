@@ -47,6 +47,8 @@ ml = [
     "lightgbm>=4.0",
     "torch>=2.0",
     "gpytorch>=1.10",
+    "onnx>=1.15",
+    "onnxscript>=0.7",
 ]
 trading = [
     "yfinance>=0.2",

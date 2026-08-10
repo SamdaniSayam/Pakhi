@@ -32,7 +32,7 @@ WORKDIR /home/pakhi
 
 # Install pakhi from built wheel (no build tools in runtime)
 COPY --from=builder /wheels/*.whl /tmp/wheels/
-RUN pip install --no-cache-dir /tmp/wheels/*.whl[all] && \
+RUN pip install --no-cache-dir "$(ls /tmp/wheels/*.whl)[all]" && \
     rm -rf /tmp/wheels
 
 # Pre-fetch Open-Meteo timezone data so first run is fast

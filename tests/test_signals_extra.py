@@ -1,4 +1,5 @@
 """Tests for pakhi.signals — all signal modules."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from pakhi.signals.base import Action, BaseSignal, Signal, position_size
+from pakhi.signals.base import Action, Signal, position_size
 from pakhi.signals.drought import DroughtSignal
 from pakhi.signals.ensemble_signal import EnsembleSignal
 from pakhi.signals.heat import PowerSignal
@@ -38,9 +39,14 @@ class TestPositionSize:
 
 class TestSignal:
     def test_signal_clipping(self):
-        s = Signal(action=Action.LONG, size=2.0, confidence=-0.5,
-                   instrument="X", timestamp=datetime.now(timezone.utc),
-                   reasoning="test")
+        s = Signal(
+            action=Action.LONG,
+            size=2.0,
+            confidence=-0.5,
+            instrument="X",
+            timestamp=datetime.now(timezone.utc),
+            reasoning="test",
+        )
         assert s.size == 1.0
         assert s.confidence == 0.0
 
@@ -109,18 +115,22 @@ class TestEnsembleSignal:
 class TestPowerSignal:
     def test_generate_heatwave(self):
         sig = PowerSignal(heatwave_threshold=38.0, min_consecutive_days=3)
-        result = sig.generate({
-            "temperature_forecast": [39, 40, 41, 42],
-            "market": "ERCOT",
-        })
+        result = sig.generate(
+            {
+                "temperature_forecast": [39, 40, 41, 42],
+                "market": "ERCOT",
+            }
+        )
         assert result.action == Action.LONG
 
     def test_generate_no_heatwave(self):
         sig = PowerSignal(heatwave_threshold=38.0, min_consecutive_days=3)
-        result = sig.generate({
-            "temperature_forecast": [30, 31, 32],
-            "market": "ERCOT",
-        })
+        result = sig.generate(
+            {
+                "temperature_forecast": [30, 31, 32],
+                "market": "ERCOT",
+            }
+        )
         assert result.action == Action.FLAT
 
     def test_generate_empty(self):
@@ -130,41 +140,46 @@ class TestPowerSignal:
 
     def test_with_wind(self):
         sig = PowerSignal(min_consecutive_days=2)
-        result = sig.generate({
-            "temperature_forecast": [39, 40, 41],
-            "market": "ERCOT",
-            "wind_capacity_factor": [0.05, 0.08, 0.10],
-        })
+        result = sig.generate(
+            {
+                "temperature_forecast": [39, 40, 41],
+                "market": "ERCOT",
+                "wind_capacity_factor": [0.05, 0.08, 0.10],
+            }
+        )
         assert result.action == Action.LONG
 
 
 class TestHurricaneSignal:
     def test_generate_long(self):
         sig = HurricaneSignal(entry_threshold=0.3)
-        result = sig.generate({
-            "landfall_prob": 0.8,
-            "category": 4,
-            "closest_approach_miles": 100,
-            "hours_to_landfall": 24,
-        })
+        result = sig.generate(
+            {
+                "landfall_prob": 0.8,
+                "category": 4,
+                "closest_approach_miles": 100,
+                "hours_to_landfall": 24,
+            }
+        )
         assert result.action == Action.LONG
         assert result.instrument == "NG_FUTURES"
 
     def test_generate_flat(self):
         sig = HurricaneSignal(entry_threshold=0.9)
-        result = sig.generate({
-            "landfall_prob": 0.1,
-            "category": 1,
-            "closest_approach_miles": 500,
-            "hours_to_landfall": 168,
-        })
+        result = sig.generate(
+            {
+                "landfall_prob": 0.1,
+                "category": 1,
+                "closest_approach_miles": 500,
+                "hours_to_landfall": 168,
+            }
+        )
         assert result.action == Action.FLAT
 
     def test_generate_override_prob(self):
         sig = HurricaneSignal(entry_threshold=0.3)
         result = sig.generate(
-            {"category": 4, "closest_approach_miles": 50,
-             "hours_to_landfall": 24},
+            {"category": 4, "closest_approach_miles": 50, "hours_to_landfall": 24},
             landfall_probability=0.9,
         )
         assert result.action == Action.LONG
@@ -173,27 +188,33 @@ class TestHurricaneSignal:
 class TestWindPowerSignal:
     def test_low_wind(self):
         sig = WindPowerSignal()
-        result = sig.generate({
-            "wind_forecast": [0.05, 0.08, 0.10],
-            "market": "PJM",
-        })
+        result = sig.generate(
+            {
+                "wind_forecast": [0.05, 0.08, 0.10],
+                "market": "PJM",
+            }
+        )
         assert result.action == Action.FLAT
 
     def test_high_wind(self):
         sig = WindPowerSignal()
-        result = sig.generate({
-            "wind_forecast": [0.8, 0.9, 0.95],
-            "wind_climatology": [0.1, 0.2, 0.3, 0.4, 0.5],
-            "market": "PJM",
-        })
+        result = sig.generate(
+            {
+                "wind_forecast": [0.8, 0.9, 0.95],
+                "wind_climatology": [0.1, 0.2, 0.3, 0.4, 0.5],
+                "market": "PJM",
+            }
+        )
         assert result.action == Action.SHORT
 
     def test_normal_wind(self):
         sig = WindPowerSignal()
-        result = sig.generate({
-            "wind_forecast": [0.4, 0.5, 0.5],
-            "market": "PJM",
-        })
+        result = sig.generate(
+            {
+                "wind_forecast": [0.4, 0.5, 0.5],
+                "market": "PJM",
+            }
+        )
         assert result.action == Action.FLAT
 
     def test_empty(self):
@@ -203,9 +224,11 @@ class TestWindPowerSignal:
 
     def test_with_climatology(self):
         sig = WindPowerSignal()
-        result = sig.generate({
-            "wind_forecast": [0.05],
-            "wind_climatology": [0.3, 0.4, 0.5],
-            "market": "PJM",
-        })
+        result = sig.generate(
+            {
+                "wind_forecast": [0.05],
+                "wind_climatology": [0.3, 0.4, 0.5],
+                "market": "PJM",
+            }
+        )
         assert result.action == Action.LONG

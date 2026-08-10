@@ -461,10 +461,17 @@ def _evaluate_signal(instrument: str) -> tuple[str, float, str]:
 
         connector = OpenMeteoConnector()
         # Fetch current conditions for a relevant region
-        lat, lon = {"OJ_FUTURES": (28.5, -81.5), "NG_FUTURES": (31.0, -96.0),
-                     "ERCOT_FUTURES": (31.0, -96.0)}.get(instrument, (40.7, -74.0))
-        connector.forecast(lat=lat, lon=lon, days=1,
-                          hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"])
+        lat, lon = {
+            "OJ_FUTURES": (28.5, -81.5),
+            "NG_FUTURES": (31.0, -96.0),
+            "ERCOT_FUTURES": (31.0, -96.0),
+        }.get(instrument, (40.7, -74.0))
+        connector.forecast(
+            lat=lat,
+            lon=lon,
+            days=1,
+            hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"],
+        )
         return ("LONG", 0.60, "Based on live weather data analysis.")
     except Exception:
         pass
@@ -517,8 +524,12 @@ def status(ctx: click.Context) -> None:
         from pakhi.src.openmeteo import OpenMeteoConnector
 
         connector = OpenMeteoConnector()
-        connector.forecast(lat=40.7, lon=-74.0, days=1,
-                          hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"])
+        connector.forecast(
+            lat=40.7,
+            lon=-74.0,
+            days=1,
+            hourly=["temperature_2m", "wind_speed_10m", "surface_pressure"],
+        )
     except Exception:
         weather_data["description"] = "Partly cloudy (sample)"
 
@@ -642,7 +653,6 @@ def backtest(
     except KeyError as e:
         _exit_error(str(e))
 
-
     try:
         start_dt = datetime.strptime(start, "%Y-%m-%d")
         end_dt = datetime.strptime(end, "%Y-%m-%d")
@@ -669,11 +679,7 @@ def backtest(
 
     progress_desc = f"Backtesting {instrument}"
     with _spinner(progress_desc) as progress:
-        task = (
-            progress.add_task(progress_desc, total=n_days - 1)
-            if _HAS_RICH
-            else None
-        )
+        task = progress.add_task(progress_desc, total=n_days - 1) if _HAS_RICH else None
 
         for i in range(1, n_days):
             window = min(20, i)
@@ -762,7 +768,8 @@ def backtest(
         table.add_row("Total Trades", f"{len(trade_log)}")
         table.add_row("Initial Capital", f"${initial_capital:,.0f}")
         table.add_row(
-            "Final Equity", f"${result.equity_curve[-1]:,.0f}" if len(result.equity_curve) > 0 else "—"
+            "Final Equity",
+            f"${result.equity_curve[-1]:,.0f}" if len(result.equity_curve) > 0 else "—",
         )
         console.print(table)
     else:

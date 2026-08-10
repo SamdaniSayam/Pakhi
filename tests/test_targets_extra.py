@@ -1,23 +1,29 @@
 """Tests for pakhi.targets — all target modules."""
+
 from __future__ import annotations
 
-import math
 from datetime import datetime, timezone
 
 import numpy as np
 import pytest
 
+from pakhi.targets.hurricane import (
+    rainfall_accumulation,
+    rapid_intensification_probability,
+    saffir_simpson,
+    wind_radius_estimate,
+)
 from pakhi.targets.precipitation import (
     drought_index,
     precipitation_accumulation,
     rain_days_probability,
     snow_probability,
 )
-from pakhi.targets.hurricane import (
-    rainfall_accumulation,
-    rapid_intensification_probability,
-    saffir_simpson,
-    wind_radius_estimate,
+from pakhi.targets.pressure import (
+    central_pressure_to_category,
+    pressure_gradient_force,
+    pressure_tendency,
+    storm_surge_estimate,
 )
 from pakhi.targets.solar import (
     clear_sky_radiation,
@@ -37,12 +43,6 @@ from pakhi.targets.wind import (
     power_curve,
     wind_direction_components,
     wind_power_forecast,
-)
-from pakhi.targets.pressure import (
-    central_pressure_to_category,
-    pressure_gradient_force,
-    pressure_tendency,
-    storm_surge_estimate,
 )
 
 
@@ -273,7 +273,7 @@ class TestWind:
     def test_wind_direction_array(self):
         ws = np.array([10.0, 10.0])
         wd = np.array([0.0, 90.0])
-        u, v = wind_direction_components(ws, wd)
+        u, _v = wind_direction_components(ws, wd)
         assert len(u) == 2
 
 
@@ -299,5 +299,5 @@ class TestPressure:
         assert 0 <= direction <= 360
 
     def test_pgf_equator(self):
-        mag, direction = pressure_gradient_force(0.01, 0.005, 0.0)
+        mag, _direction = pressure_gradient_force(0.01, 0.005, 0.0)
         assert mag > 0

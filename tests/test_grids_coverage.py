@@ -1,4 +1,5 @@
 """Comprehensive coverage tests for grids/subset.py, grids/regridder.py, grids/interpolate.py."""
+
 from __future__ import annotations
 
 import warnings
@@ -17,7 +18,6 @@ from pakhi.grids.interpolate import (
 )
 from pakhi.grids.regridder import (
     _regrid_conservative,
-    _regrid_nearest,
     create_regular_grid,
     regrid,
     regrid_to_regular,
@@ -32,18 +32,19 @@ from pakhi.grids.subset import (
     subset_polygon,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _da2d(lat_min=0, lat_max=10, n_lat=11, lon_min=0, lon_max=10, n_lon=11):
     lats = np.linspace(lat_min, lat_max, n_lat)
     lons = np.linspace(lon_min, lon_max, n_lon)
     rng = np.random.default_rng(0)
     data = rng.random((n_lat, n_lon))
-    return xr.DataArray(data, dims=["latitude", "longitude"],
-                        coords={"latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+    )
 
 
 def _da2d_named(coord_lat="lat", coord_lon="lon"):
@@ -51,16 +52,20 @@ def _da2d_named(coord_lat="lat", coord_lon="lon"):
     lons = np.linspace(0, 10, 11)
     rng = np.random.default_rng(0)
     data = rng.random((11, 11))
-    return xr.DataArray(data, dims=[coord_lat, coord_lon],
-                        coords={coord_lat: lats, coord_lon: lons})
+    return xr.DataArray(
+        data, dims=[coord_lat, coord_lon], coords={coord_lat: lats, coord_lon: lons}
+    )
 
 
 def _da3d():
     lats = np.linspace(0, 10, 6)
     lons = np.linspace(0, 10, 6)
     data = np.random.default_rng(1).random((3, 6, 6))
-    return xr.DataArray(data, dims=["time", "latitude", "longitude"],
-                        coords={"time": [0, 1, 2], "latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data,
+        dims=["time", "latitude", "longitude"],
+        coords={"time": [0, 1, 2], "latitude": lats, "longitude": lons},
+    )
 
 
 # ===========================================================================
@@ -161,8 +166,11 @@ class TestSubsetCountry:
         lats = np.linspace(15, 55, 20)
         lons = np.linspace(-130, -60, 20)
         data = np.random.default_rng(0).random((3, 20, 20))
-        da = xr.DataArray(data, dims=["time", "latitude", "longitude"],
-                          coords={"time": [0, 1, 2], "latitude": lats, "longitude": lons})
+        da = xr.DataArray(
+            data,
+            dims=["time", "latitude", "longitude"],
+            coords={"time": [0, 1, 2], "latitude": lats, "longitude": lons},
+        )
         result = subset_country(da, "US")
         # subset_bbox clips spatial dims, so result is smaller
         assert result.sizes["time"] == 3
@@ -271,7 +279,9 @@ class TestSubsetHelpers:
 
     def test_get_country_mask_all_true_inside_bbox(self):
         lat_min, lat_max, lon_min, lon_max = 24.5, 49.4, -125.0, -66.9
-        da = _da2d(lat_min=lat_min, lat_max=lat_max, n_lat=20, lon_min=lon_min, lon_max=lon_max, n_lon=20)
+        da = _da2d(
+            lat_min=lat_min, lat_max=lat_max, n_lat=20, lon_min=lon_min, lon_max=lon_max, n_lon=20
+        )
         mask = _get_country_mask(da, lat_min, lat_max, lon_min, lon_max, "US")
         assert mask.all()
 
@@ -304,9 +314,11 @@ class TestRegridderConservative:
     def test_conservative_with_nan_source(self):
         data = np.full((5, 5), np.nan)
         data[2, 2] = 42.0
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": np.linspace(0, 10, 5),
-                                  "longitude": np.linspace(0, 10, 5)})
+        da = xr.DataArray(
+            data,
+            dims=["latitude", "longitude"],
+            coords={"latitude": np.linspace(0, 10, 5), "longitude": np.linspace(0, 10, 5)},
+        )
         target = create_regular_grid((4, 6), (4, 6), resolution_deg=1.0)
         result = regrid(da, target, method="conservative")
         assert result.shape == target.shape
@@ -357,8 +369,9 @@ class TestRegridderBilinearDescending:
         lats = np.linspace(10, 0, 11)
         lons = np.linspace(0, 10, 11)
         data = np.arange(121, dtype=np.float64).reshape(11, 11)
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": lats, "longitude": lons})
+        da = xr.DataArray(
+            data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+        )
         target = create_regular_grid((2, 8), (2, 8), resolution_deg=2.0)
         result = regrid(da, target, method="bilinear")
         assert result.shape == target.shape
@@ -368,8 +381,9 @@ class TestRegridderBilinearDescending:
         lats = np.linspace(0, 10, 11)
         lons = np.linspace(10, 0, 11)
         data = np.arange(121, dtype=np.float64).reshape(11, 11)
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": lats, "longitude": lons})
+        da = xr.DataArray(
+            data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+        )
         target = create_regular_grid((2, 8), (2, 8), resolution_deg=2.0)
         result = regrid(da, target, method="bilinear")
         assert result.shape == target.shape
@@ -378,8 +392,9 @@ class TestRegridderBilinearDescending:
         lats = np.linspace(10, 0, 11)
         lons = np.linspace(10, 0, 11)
         data = np.random.default_rng(42).random((11, 11))
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": lats, "longitude": lons})
+        da = xr.DataArray(
+            data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+        )
         target = create_regular_grid((2, 8), (2, 8), resolution_deg=2.0)
         result = regrid(da, target, method="bilinear")
         assert result.shape == target.shape
@@ -400,9 +415,11 @@ class TestRegridderEdgeCases:
 
     def test_nearest_preserves_source_values(self):
         data = np.arange(25, dtype=np.float64).reshape(5, 5)
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": np.linspace(0, 4, 5),
-                                  "longitude": np.linspace(0, 4, 5)})
+        da = xr.DataArray(
+            data,
+            dims=["latitude", "longitude"],
+            coords={"latitude": np.linspace(0, 4, 5), "longitude": np.linspace(0, 4, 5)},
+        )
         target = create_regular_grid((0, 4), (0, 4), resolution_deg=1.0)
         result = regrid(da, target, method="nearest")
         # Nearest should pick existing values
@@ -441,18 +458,21 @@ class TestRegridderEdgeCases:
     def test_find_coord_name_lat_variant(self):
         da = _da2d_named("lat", "lon")
         from pakhi.grids.regridder import _find_coord_name
+
         assert _find_coord_name(da, "latitude") == "lat"
         assert _find_coord_name(da, "longitude") == "lon"
 
     def test_find_coord_name_yx(self):
         da = _da2d_named("y", "x")
         from pakhi.grids.regridder import _find_coord_name
+
         assert _find_coord_name(da, "latitude") == "y"
         assert _find_coord_name(da, "longitude") == "x"
 
     def test_find_coord_name_raises(self):
         da = xr.DataArray(np.zeros((3, 3)), dims=["a", "b"])
         from pakhi.grids.regridder import _find_coord_name
+
         with pytest.raises(ValueError, match="Cannot find latitude"):
             _find_coord_name(da, "latitude")
 
@@ -474,9 +494,11 @@ class TestRegridderEdgeCases:
 
     def test_bilinear_all_nan_region(self):
         data = np.full((5, 5), np.nan)
-        da = xr.DataArray(data, dims=["latitude", "longitude"],
-                          coords={"latitude": np.linspace(0, 4, 5),
-                                  "longitude": np.linspace(0, 4, 5)})
+        da = xr.DataArray(
+            data,
+            dims=["latitude", "longitude"],
+            coords={"latitude": np.linspace(0, 4, 5), "longitude": np.linspace(0, 4, 5)},
+        )
         target = create_regular_grid((0, 4), (0, 4), resolution_deg=1.0)
         result = regrid(da, target, method="bilinear")
         assert np.all(np.isnan(result.values))
@@ -494,7 +516,9 @@ class TestInterpolationCressman:
         lons = grid.coords["longitude"].values
         with pytest.warns(UserWarning, match="No valid observations"):
             result = cressman_interpolation(
-                grid, lats[5], lons[5],
+                grid,
+                lats[5],
+                lons[5],
                 obs_lat=np.array([np.nan]),
                 obs_lon=np.array([np.nan]),
                 obs_values=np.array([np.nan]),
@@ -507,7 +531,9 @@ class TestInterpolationCressman:
         lons = grid.coords["longitude"].values
         with pytest.warns(UserWarning, match="No valid observations"):
             result = cressman_interpolation(
-                grid, lats[3], lons[3],
+                grid,
+                lats[3],
+                lons[3],
                 obs_lat=np.array([1.0, 2.0]),
                 obs_lon=np.array([1.0, 2.0]),
                 obs_values=np.array([np.nan, np.nan]),
@@ -519,7 +545,9 @@ class TestInterpolationCressman:
         lats = grid.coords["latitude"].values
         lons = grid.coords["longitude"].values
         result = cressman_interpolation(
-            grid, lats[5], lons[5],
+            grid,
+            lats[5],
+            lons[5],
             obs_lat=np.array([0.0]),
             obs_lon=np.array([0.0]),
             obs_values=np.array([999.0]),
@@ -537,8 +565,12 @@ class TestInterpolationCressman:
         obs_lon = np.array([lons[2]])
         obs_val = np.array([100.0])
         result = cressman_interpolation(
-            grid, target_lats, target_lons,
-            obs_lat, obs_lon, obs_val,
+            grid,
+            target_lats,
+            target_lons,
+            obs_lat,
+            obs_lon,
+            obs_val,
             search_radius_km=500.0,
         )
         assert result.shape == (2,)
@@ -548,7 +580,9 @@ class TestInterpolationCressman:
         lats = grid.coords["latitude"].values
         lons = grid.coords["longitude"].values
         result = cressman_interpolation(
-            grid, float(lats[5]), float(lons[5]),
+            grid,
+            float(lats[5]),
+            float(lons[5]),
             obs_lat=np.array([lats[5]]),
             obs_lon=np.array([lons[5]]),
             obs_values=np.array([42.0]),
@@ -564,8 +598,12 @@ class TestInterpolationCressman:
         obs_lon = np.array([lons[4], lons[5], lons[6]])
         obs_val = np.array([10.0, 20.0, 30.0])
         result = cressman_interpolation(
-            grid, lats[5], lons[5],
-            obs_lat, obs_lon, obs_val,
+            grid,
+            lats[5],
+            lons[5],
+            obs_lat,
+            obs_lon,
+            obs_val,
             search_radius_km=500.0,
         )
         assert 10.0 < result < 30.0
@@ -582,7 +620,9 @@ class TestInterpolationIDW:
         lats = grid.coords["latitude"].values
         lons = grid.coords["longitude"].values
         result = inverse_distance_weighting(
-            grid, lats[5], lons[5],
+            grid,
+            lats[5],
+            lons[5],
             obs_lat=np.array([lats[5]]),
             obs_lon=np.array([lons[5]]),
             obs_values=np.array([77.7]),
@@ -593,7 +633,9 @@ class TestInterpolationIDW:
         grid = _da2d()
         with pytest.warns(UserWarning, match="No valid observations"):
             result = inverse_distance_weighting(
-                grid, 5.0, 5.0,
+                grid,
+                5.0,
+                5.0,
                 obs_lat=np.array([]),
                 obs_lon=np.array([]),
                 obs_values=np.array([]),
@@ -604,7 +646,9 @@ class TestInterpolationIDW:
         grid = _da2d()
         with pytest.warns(UserWarning, match="No valid observations"):
             result = inverse_distance_weighting(
-                grid, 5.0, 5.0,
+                grid,
+                5.0,
+                5.0,
                 obs_lat=np.array([1.0]),
                 obs_lon=np.array([1.0]),
                 obs_values=np.array([np.nan]),
@@ -614,7 +658,9 @@ class TestInterpolationIDW:
     def test_nearest_obs_dominates_with_high_power(self):
         grid = _da2d()
         result = inverse_distance_weighting(
-            grid, 5.0, 5.0,
+            grid,
+            5.0,
+            5.0,
             obs_lat=np.array([5.0, 8.0]),
             obs_lon=np.array([5.0, 8.0]),
             obs_values=np.array([100.0, 0.0]),
@@ -629,7 +675,9 @@ class TestInterpolationIDW:
         target_lats = np.array([lats[2], lats[6]])
         target_lons = np.array([lons[2], lons[6]])
         result = inverse_distance_weighting(
-            grid, target_lats, target_lons,
+            grid,
+            target_lats,
+            target_lons,
             obs_lat=np.array([lats[4]]),
             obs_lon=np.array([lons[4]]),
             obs_values=np.array([50.0]),
@@ -639,7 +687,9 @@ class TestInterpolationIDW:
     def test_power_1(self):
         grid = _da2d()
         result = inverse_distance_weighting(
-            grid, 5.0, 5.0,
+            grid,
+            5.0,
+            5.0,
             obs_lat=np.array([4.0, 6.0]),
             obs_lon=np.array([5.0, 5.0]),
             obs_values=np.array([10.0, 20.0]),
@@ -658,8 +708,9 @@ class TestInterpolationEdgeCases:
         lats = np.linspace(45, 25, 11)
         lons = np.linspace(-100, -80, 11)
         data = np.arange(121, dtype=np.float64).reshape(11, 11)
-        grid = xr.DataArray(data, dims=["latitude", "longitude"],
-                            coords={"latitude": lats, "longitude": lons})
+        grid = xr.DataArray(
+            data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+        )
         result = bilinear_interpolation(grid, 35.0, -90.0)
         assert np.isfinite(result)
 
@@ -743,7 +794,9 @@ class TestInterpolationEdgeCases:
     def test_idw_scalar_output(self):
         grid = _da2d()
         result = inverse_distance_weighting(
-            grid, 5.0, 5.0,
+            grid,
+            5.0,
+            5.0,
             obs_lat=np.array([5.0]),
             obs_lon=np.array([5.0]),
             obs_values=np.array([33.3]),

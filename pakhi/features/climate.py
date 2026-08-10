@@ -249,7 +249,9 @@ class ClimateFeatures:
         if mask.ndim == 0:
             return np.zeros_like(mask, dtype=bool)
         if mask.ndim > 1:
-            return np.apply_along_axis(lambda m: ClimateFeatures._streak_np(m, min_length), axis=0, arr=mask)
+            return np.apply_along_axis(
+                lambda m: ClimateFeatures._streak_np(m, min_length), axis=0, arr=mask
+            )
 
         result = np.zeros_like(mask, dtype=bool)
         count = 0

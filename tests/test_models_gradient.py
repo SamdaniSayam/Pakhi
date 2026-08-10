@@ -1,12 +1,11 @@
 """Tests for pakhi.models.gradient — gradient boosting models."""
+
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
-from unittest.mock import patch, MagicMock
 
-from pakhi.models.gradient import GradientForecaster, Backend
+from pakhi.models.gradient import GradientForecaster
 
 
 def _make_data(n=200):
@@ -46,7 +45,7 @@ class TestGradientForecaster:
         assert "rmse" in scores
 
     def test_predict_before_fit(self):
-        X, y = _make_data()
+        X, _y = _make_data()
         model = GradientForecaster()
         with pytest.raises(RuntimeError):
             model.predict(X)

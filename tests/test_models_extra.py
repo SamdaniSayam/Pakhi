@@ -1,4 +1,5 @@
 """Tests for pakhi.models — ensemble, gaussian, lstm, WeatherDataset, AttentionLayer."""
+
 from __future__ import annotations
 
 import tempfile
@@ -172,8 +173,11 @@ class TestTrainValTestSplit:
         data = np.arange(365 * 3)
         dates = np.arange(365 * 3).astype("datetime64[D]")
         train, val, test = train_val_test_split(
-            data, time_index=dates,
-            train_years=(1970, 1971), val_year=1972, test_year=1973,
+            data,
+            time_index=dates,
+            train_years=(1970, 1971),
+            val_year=1972,
+            test_year=1973,
         )
         total = len(train) + len(val) + len(test)
         assert total > 0
@@ -404,8 +408,13 @@ class TestLSTMForecaster:
     def test_fit_predict(self):
         X, y = self._make_data(n=200, features=4)
         model = LSTMForecaster(
-            input_dim=4, hidden_dim=16, n_layers=1, max_epochs=3,
-            batch_size=32, seq_len=10, forecast_horizon=1,
+            input_dim=4,
+            hidden_dim=16,
+            n_layers=1,
+            max_epochs=3,
+            batch_size=32,
+            seq_len=10,
+            forecast_horizon=1,
         )
         model.fit(X, y)
         assert model._fitted
@@ -415,8 +424,13 @@ class TestLSTMForecaster:
     def test_fit_with_validation(self):
         X, y = self._make_data(n=200, features=4)
         model = LSTMForecaster(
-            input_dim=4, hidden_dim=16, n_layers=1, max_epochs=3,
-            batch_size=32, seq_len=10, forecast_horizon=1,
+            input_dim=4,
+            hidden_dim=16,
+            n_layers=1,
+            max_epochs=3,
+            batch_size=32,
+            seq_len=10,
+            forecast_horizon=1,
         )
         model.fit(X[:150], y[:150], X_val=X[150:], y_val=y[150:])
         assert model._fitted
@@ -424,8 +438,13 @@ class TestLSTMForecaster:
     def test_predict_proba(self):
         X, y = self._make_data(n=200, features=4)
         model = LSTMForecaster(
-            input_dim=4, hidden_dim=16, n_layers=1, max_epochs=2,
-            batch_size=32, seq_len=10, mc_samples=5,
+            input_dim=4,
+            hidden_dim=16,
+            n_layers=1,
+            max_epochs=2,
+            batch_size=32,
+            seq_len=10,
+            mc_samples=5,
         )
         model.fit(X, y)
         result = model.predict_proba(X[:50])
@@ -440,21 +459,30 @@ class TestLSTMForecaster:
     def test_score(self):
         X, y = self._make_data(n=200, features=4)
         model = LSTMForecaster(
-            input_dim=4, hidden_dim=16, n_layers=1, max_epochs=2,
-            batch_size=32, seq_len=10,
+            input_dim=4,
+            hidden_dim=16,
+            n_layers=1,
+            max_epochs=2,
+            batch_size=32,
+            seq_len=10,
         )
         model.fit(X, y)
         result = model.predict(X)
         # score uses the same predict internally, so shapes will match
-        n = min(result.deterministic.shape[0], y[:result.deterministic.shape[0]].shape[0])
+        n = min(result.deterministic.shape[0], y[: result.deterministic.shape[0]].shape[0])
         s = compute_metrics(y[:n], result.deterministic[:n])
         assert "rmse" in s
 
     def test_save_load(self):
         X, y = self._make_data(n=200, features=4)
         model = LSTMForecaster(
-            input_dim=4, hidden_dim=16, n_layers=1, max_epochs=2,
-            batch_size=32, seq_len=10, forecast_horizon=1,
+            input_dim=4,
+            hidden_dim=16,
+            n_layers=1,
+            max_epochs=2,
+            batch_size=32,
+            seq_len=10,
+            forecast_horizon=1,
         )
         model.fit(X, y)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -472,6 +500,7 @@ class TestLSTMForecaster:
 
     def test_pinball_loss(self):
         import torch
+
         preds = torch.tensor([[1.0, 2.0]])
         targets = torch.tensor([[1.5, 1.0]])
         loss = _pinball_loss(preds, targets, [0.1, 0.5, 0.9])

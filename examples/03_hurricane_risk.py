@@ -314,5 +314,3 @@ print("  └──────────────────────�
 print(f"\n{DIVIDER}")
 print("  Done. Run with: python examples/03_hurricane_risk.py")
 print(DIVIDER)
-
-

@@ -1,4 +1,5 @@
 """Tests for pakhi.predict — deterministic, multi_step, probabilistic, verification."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -110,8 +111,12 @@ class TestDeterministicPredictor:
         X_train = np.random.randn(50, 1)
         y_train = np.random.randn(50)
         result = self.dp.predict_multi_step(
-            model, np.array([[0.0]]), steps=5, method="direct",
-            y_train=y_train, X_train=X_train,
+            model,
+            np.array([[0.0]]),
+            steps=5,
+            method="direct",
+            y_train=y_train,
+            X_train=X_train,
         )
         assert result.values.shape == (5,)
         assert result.metadata["method"] == "direct"
@@ -133,8 +138,12 @@ class TestDeterministicPredictor:
         X_train = np.random.randn(n, 1)
         y_train = np.random.randn(n)
         result = self.dp.predict_multi_step(
-            model, np.array([[0.0]]), steps=3, method="multi_output",
-            y_train=y_train, X_train=X_train,
+            model,
+            np.array([[0.0]]),
+            steps=3,
+            method="multi_output",
+            y_train=y_train,
+            X_train=X_train,
         )
         assert isinstance(result, ForecastResult)
 
@@ -171,17 +180,23 @@ class TestDeterministicPredictor:
     def test_compute_metric_accuracy(self):
         y_true = np.array([1, 0, 1, 1, 0])
         y_pred = np.array([1, 0, 0, 1, 0])
-        assert DeterministicPredictor._compute_metric(y_true, y_pred, "accuracy") == pytest.approx(0.8)
+        assert DeterministicPredictor._compute_metric(y_true, y_pred, "accuracy") == pytest.approx(
+            0.8
+        )
 
     def test_compute_metric_precision(self):
         y_true = np.array([1, 0, 1, 1, 0])
         y_pred = np.array([1, 0, 0, 1, 0])
-        assert DeterministicPredictor._compute_metric(y_true, y_pred, "precision") == pytest.approx(1.0)
+        assert DeterministicPredictor._compute_metric(y_true, y_pred, "precision") == pytest.approx(
+            1.0
+        )
 
     def test_compute_metric_recall(self):
         y_true = np.array([1, 0, 1, 1, 0])
         y_pred = np.array([1, 0, 0, 1, 0])
-        assert DeterministicPredictor._compute_metric(y_true, y_pred, "recall") == pytest.approx(2 / 3)
+        assert DeterministicPredictor._compute_metric(y_true, y_pred, "recall") == pytest.approx(
+            2 / 3
+        )
 
     def test_compute_metric_f1(self):
         y_true = np.array([1, 0, 1, 1, 0])

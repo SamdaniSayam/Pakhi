@@ -1,4 +1,5 @@
 """Tests for pakhi.risk — alerts, uncertainty, metrics, backtest."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -88,18 +89,26 @@ class TestAlertManager:
 
     def test_check_heatwave(self):
         mgr = AlertManager()
-        result = mgr.check_heatwave({
-            "temperature_forecast": [39, 40, 41, 42, 38],
-            "location": "Dallas",
-        }, threshold=38.0, days=3)
+        result = mgr.check_heatwave(
+            {
+                "temperature_forecast": [39, 40, 41, 42, 38],
+                "location": "Dallas",
+            },
+            threshold=38.0,
+            days=3,
+        )
         assert result is not None
         assert result.alert_type == "heatwave"
 
     def test_check_heatwave_no_alert(self):
         mgr = AlertManager()
-        result = mgr.check_heatwave({
-            "temperature_forecast": [30, 31, 32],
-        }, threshold=38.0, days=3)
+        result = mgr.check_heatwave(
+            {
+                "temperature_forecast": [30, 31, 32],
+            },
+            threshold=38.0,
+            days=3,
+        )
         assert result is None
 
     def test_check_heatwave_empty(self):
@@ -109,40 +118,52 @@ class TestAlertManager:
 
     def test_check_hurricane(self):
         mgr = AlertManager()
-        result = mgr.check_hurricane({
-            "landfall_prob": 0.8,
-            "category": 4,
-            "closest_approach_miles": 50,
-        })
+        result = mgr.check_hurricane(
+            {
+                "landfall_prob": 0.8,
+                "category": 4,
+                "closest_approach_miles": 50,
+            }
+        )
         assert result is not None
         assert result.alert_type == "hurricane"
         assert result.severity == AlertSeverity.CRITICAL
 
     def test_check_hurricane_low_prob(self):
         mgr = AlertManager()
-        result = mgr.check_hurricane({
-            "landfall_prob": 0.05,
-            "category": 1,
-            "closest_approach_miles": 500,
-        })
+        result = mgr.check_hurricane(
+            {
+                "landfall_prob": 0.05,
+                "category": 1,
+                "closest_approach_miles": 500,
+            }
+        )
         assert result is None
 
     def test_check_drought(self):
         mgr = AlertManager()
         spi = list(np.full(35, -2.0))
-        result = mgr.check_drought({
-            "spi_values": spi,
-            "region": "Midwest",
-        }, threshold=-1.5, days=30)
+        result = mgr.check_drought(
+            {
+                "spi_values": spi,
+                "region": "Midwest",
+            },
+            threshold=-1.5,
+            days=30,
+        )
         assert result is not None
         assert result.alert_type == "drought"
 
     def test_check_drought_no_alert(self):
         mgr = AlertManager()
-        result = mgr.check_drought({
-            "spi_values": [1.0, 0.5, -0.2],
-            "region": "Midwest",
-        }, threshold=-1.5, days=30)
+        result = mgr.check_drought(
+            {
+                "spi_values": [1.0, 0.5, -0.2],
+                "region": "Midwest",
+            },
+            threshold=-1.5,
+            days=30,
+        )
         assert result is None
 
     def test_check_drought_empty(self):
@@ -154,33 +175,41 @@ class TestAlertManager:
 class TestSendAlert:
     def test_log_channel(self):
         a = Alert(
-            severity=AlertSeverity.LOW, message="test",
+            severity=AlertSeverity.LOW,
+            message="test",
             timestamp=datetime.now(timezone.utc),
-            trigger_value=0.0, alert_type="test",
+            trigger_value=0.0,
+            alert_type="test",
         )
         send_alert(a, channels=["log"])
 
     def test_email_placeholder(self):
         a = Alert(
-            severity=AlertSeverity.LOW, message="test",
+            severity=AlertSeverity.LOW,
+            message="test",
             timestamp=datetime.now(timezone.utc),
-            trigger_value=0.0, alert_type="test",
+            trigger_value=0.0,
+            alert_type="test",
         )
         send_alert(a, channels=["email", "slack", "telegram"])
 
     def test_unknown_channel(self):
         a = Alert(
-            severity=AlertSeverity.LOW, message="test",
+            severity=AlertSeverity.LOW,
+            message="test",
             timestamp=datetime.now(timezone.utc),
-            trigger_value=0.0, alert_type="test",
+            trigger_value=0.0,
+            alert_type="test",
         )
         send_alert(a, channels=["carrier_pigeon"])
 
     def test_default_channels(self):
         a = Alert(
-            severity=AlertSeverity.LOW, message="test",
+            severity=AlertSeverity.LOW,
+            message="test",
             timestamp=datetime.now(timezone.utc),
-            trigger_value=0.0, alert_type="test",
+            trigger_value=0.0,
+            alert_type="test",
         )
         send_alert(a)
 
@@ -312,15 +341,24 @@ class TestBacktest:
     def test_backtest_run(self):
         engine = BacktestEngine()
         dates = pd.date_range("2023-01-01", periods=100)
-        data = pd.DataFrame({
-            "close": np.cumsum(np.random.randn(100) * 0.5) + 100,
-        }, index=dates)
+        data = pd.DataFrame(
+            {
+                "close": np.cumsum(np.random.randn(100) * 0.5) + 100,
+            },
+            index=dates,
+        )
 
         def sig_gen(df, idx):
             from pakhi.signals.base import Action, Signal
-            return Signal(action=Action.LONG, size=0.1, confidence=0.6,
-                          instrument="TEST", timestamp=df.index[-1],
-                          reasoning="test")
+
+            return Signal(
+                action=Action.LONG,
+                size=0.1,
+                confidence=0.6,
+                instrument="TEST",
+                timestamp=df.index[-1],
+                reasoning="test",
+            )
 
         result = engine.run(sig_gen, data)
         assert isinstance(result, BacktestResult)
@@ -329,33 +367,63 @@ class TestBacktest:
     def test_backtest_missing_column(self):
         engine = BacktestEngine(price_column="missing")
         data = pd.DataFrame({"x": [1, 2, 3]}, index=pd.date_range("2023-01-01", periods=3))
+
         def sig_gen(df, idx):
             from pakhi.signals.base import Action, Signal
-            return Signal(action=Action.FLAT, size=0, confidence=0,
-                          instrument="X", timestamp=df.index[-1], reasoning="x")
+
+            return Signal(
+                action=Action.FLAT,
+                size=0,
+                confidence=0,
+                instrument="X",
+                timestamp=df.index[-1],
+                reasoning="x",
+            )
+
         with pytest.raises(ValueError, match="not found"):
             engine.run(sig_gen, data)
 
     def test_backtest_short_data(self):
         engine = BacktestEngine()
         data = pd.DataFrame({"close": [100.0]}, index=pd.date_range("2023-01-01", periods=1))
+
         def sig_gen(df, idx):
             from pakhi.signals.base import Action, Signal
-            return Signal(action=Action.FLAT, size=0, confidence=0,
-                          instrument="X", timestamp=df.index[-1], reasoning="x")
+
+            return Signal(
+                action=Action.FLAT,
+                size=0,
+                confidence=0,
+                instrument="X",
+                timestamp=df.index[-1],
+                reasoning="x",
+            )
+
         result = engine.run(sig_gen, data)
         assert len(result.equity_curve) == 0
 
     def test_walk_forward(self):
         engine = BacktestEngine()
         dates = pd.date_range("2023-01-01", periods=400)
-        data = pd.DataFrame({
-            "close": np.cumsum(np.random.randn(400) * 0.5) + 100,
-        }, index=dates)
+        data = pd.DataFrame(
+            {
+                "close": np.cumsum(np.random.randn(400) * 0.5) + 100,
+            },
+            index=dates,
+        )
+
         def sig_gen(df, idx):
             from pakhi.signals.base import Action, Signal
-            return Signal(action=Action.FLAT, size=0, confidence=0,
-                          instrument="X", timestamp=df.index[-1], reasoning="x")
+
+            return Signal(
+                action=Action.FLAT,
+                size=0,
+                confidence=0,
+                instrument="X",
+                timestamp=df.index[-1],
+                reasoning="x",
+            )
+
         results = engine.walk_forward(sig_gen, data, train_window=100, test_window=50)
         assert isinstance(results, list)
         assert len(results) >= 1

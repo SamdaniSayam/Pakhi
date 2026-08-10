@@ -25,9 +25,10 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
 
 from pakhi.features.climate import ClimateFeatures
-from pakhi.models.base import StandardScaler, compute_metrics
+from pakhi.models.base import ForecastResult, StandardScaler, compute_metrics
 from pakhi.models.persistence import PersistenceModel
 from pakhi.risk.alerts import AlertManager
 from pakhi.risk.metrics import max_drawdown, sharpe_ratio, var
@@ -78,7 +79,9 @@ doy = np.array([(base_time + timedelta(days=int(d))).timetuple().tm_yday for d i
 # Temperature: seasonal cycle + trends + noise (with significant weather noise)
 # Random walk component captures weather regime changes (not predictable from lags)
 random_walk = np.cumsum(np.random.normal(0, 0.5, n_days))
-temp_mean = 22.0 + 8.0 * np.sin(2 * np.pi * (doy - 80) / 365) + random_walk + np.random.normal(0, 2, n_days)
+temp_mean = (
+    22.0 + 8.0 * np.sin(2 * np.pi * (doy - 80) / 365) + random_walk + np.random.normal(0, 2, n_days)
+)
 # temp_max/min have independent measurement noise, not deterministic from temp_mean
 temp_max = temp_mean + np.random.uniform(3, 7, n_days) + np.random.normal(0, 1.5, n_days)
 temp_min = temp_mean - np.random.uniform(2, 5, n_days) + np.random.normal(0, 1.5, n_days)
@@ -236,7 +239,6 @@ X_train_s = scaler.fit_transform(X_train)
 X_test_s = scaler.transform(X_test)
 
 # Simple linear regression baseline (has actual predictive skill)
-from sklearn.linear_model import LinearRegression
 
 
 class LinearRegressionWrapper:
@@ -245,9 +247,7 @@ class LinearRegressionWrapper:
     def __init__(self, model: LinearRegression):
         self.model = model
 
-    def predict(self, X: np.ndarray) -> "ForecastResult":
-        from pakhi.models.base import ForecastResult
-
+    def predict(self, X: np.ndarray) -> ForecastResult:
         preds = self.model.predict(X)
         return ForecastResult(
             deterministic=preds.reshape(-1, 1),

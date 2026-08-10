@@ -372,8 +372,7 @@ class ERA5Connector:
             import zarr
         except ImportError as exc:
             raise ImportError(
-                "zarr is required for Google Zarr access. "
-                "Install with: pip install zarr"
+                "zarr is required for Google Zarr access. Install with: pip install zarr"
             ) from exc
 
         # Google Zarr ERA5 dataset
@@ -423,8 +422,7 @@ class ERA5Connector:
 
         if not datasets:
             raise RuntimeError(
-                "No data fetched from Google Zarr. "
-                "Check variable names and date range."
+                "No data fetched from Google Zarr. Check variable names and date range."
             )
 
         # Merge datasets

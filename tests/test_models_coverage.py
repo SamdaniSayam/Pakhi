@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 import warnings
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -23,7 +23,6 @@ from pakhi.models.climatology import (
     seasonal_climatology,
 )
 from pakhi.models.persistence import PersistenceModel
-
 
 # ---------------------------------------------------------------------------
 # Helper: simple concrete BaseModel subclass
@@ -148,11 +147,9 @@ class TestStandardScalerExtended:
 
 class TestTrainValTestSplitExtended:
     def test_single_int_train_years(self):
-        dates = np.array(
-            [np.datetime64(f"{y}-01-01") for y in range(2010, 2022)]
-        )
+        dates = np.array([np.datetime64(f"{y}-01-01") for y in range(2010, 2022)])
         data = np.arange(len(dates))
-        train, val, test = train_val_test_split(
+        train, _val, test = train_val_test_split(
             data,
             train_years=2018,
             val_year=2019,
@@ -163,11 +160,9 @@ class TestTrainValTestSplitExtended:
         assert len(test) > 0
 
     def test_tuple_test_year(self):
-        dates = np.array(
-            [np.datetime64(f"{y}-01-01") for y in range(2010, 2023)]
-        )
+        dates = np.array([np.datetime64(f"{y}-01-01") for y in range(2010, 2023)])
         data = np.arange(len(dates))
-        train, val, test = train_val_test_split(
+        train, _val, test = train_val_test_split(
             data,
             train_years=(2010, 2018),
             val_year=2019,
@@ -182,7 +177,7 @@ class TestTrainValTestSplitExtended:
         time_index = np.array(
             [np.datetime64("2010-01-01") + np.timedelta64(i, "D") for i in range(100)]
         )
-        train, val, test = train_val_test_split(
+        train, _val, _test = train_val_test_split(
             data,
             time_index=time_index,
             axis=0,
@@ -191,7 +186,7 @@ class TestTrainValTestSplitExtended:
 
     def test_no_time_index(self):
         data = np.arange(200)
-        train, val, test = train_val_test_split(data)
+        train, _val, _test = train_val_test_split(data)
         assert len(train) >= 0
 
 
@@ -261,7 +256,7 @@ class TestPersistenceModelExtended:
         assert "mape" in scores
         assert "bias" in scores
 
-    def test_predict_1d_X(self):
+    def test_predict_1d_x(self):
         X = np.array([1.0, 2.0, 3.0])
         y = np.array([10.0, 20.0, 30.0])
         m = PersistenceModel()
@@ -276,9 +271,7 @@ class TestPersistenceModelExtended:
         m.fit(X, y)
         result = m.predict_proba(X, quantiles=[0.1, 0.25, 0.5, 0.75, 0.9])
         for q in [0.1, 0.25, 0.5, 0.75, 0.9]:
-            np.testing.assert_allclose(
-                result.quantiles[f"q{q}"][:, 0], result.deterministic[:, 0]
-            )
+            np.testing.assert_allclose(result.quantiles[f"q{q}"][:, 0], result.deterministic[:, 0])
 
     def test_metadata(self):
         X = np.random.randn(5, 2)
@@ -584,9 +577,7 @@ class TestGradientForecasterExtended:
         res = m.predict_proba(self.X[:10], quantiles=[0.1, 0.25, 0.5, 0.75, 0.9])
         # Non-quantile model: all quantiles fall back to deterministic
         for q in [0.1, 0.25, 0.5, 0.75, 0.9]:
-            np.testing.assert_allclose(
-                res.quantiles[f"q{q}"], res.deterministic
-            )
+            np.testing.assert_allclose(res.quantiles[f"q{q}"], res.deterministic)
 
     def test_feature_importance(self):
         if not self.has_lgb:
@@ -677,11 +668,9 @@ class TestGradientForecasterExtended:
         res = m.predict_proba(self.X[:10], quantiles=[0.1, 0.5, 0.9])
         # Multi-output falls back to deterministic for all quantiles
         for q in [0.1, 0.5, 0.9]:
-            np.testing.assert_allclose(
-                res.quantiles[f"q{q}"], res.deterministic
-            )
+            np.testing.assert_allclose(res.quantiles[f"q{q}"], res.deterministic)
 
-    def test_2d_X_raises(self):
+    def test_2d_x_raises(self):
         if not self.has_lgb:
             pytest.skip("lightgbm not installed")
         from pakhi.models.gradient import GradientForecaster
@@ -976,9 +965,7 @@ class TestEnsembleForecasterExtended:
         m2 = self._make_model(3.0)
         m1.fit(np.zeros((5, 3)), np.zeros(5))
         m2.fit(np.zeros((5, 3)), np.zeros(5))
-        ens = self.EnsembleForecaster(
-            models=[m1, m2], method="mean", decay=0.95
-        )
+        ens = self.EnsembleForecaster(models=[m1, m2], method="mean", decay=0.95)
         ens.fit(np.zeros((5, 3)), np.zeros(5))
         X_val = np.ones((10, 3))
         y_val = np.full(10, 2.0)
@@ -1020,6 +1007,7 @@ class TestEnsembleForecasterExtended:
     def test_predict_proba_with_model_failure(self):
         class _PredictProbaFailModel:
             """Works for predict but fails for predict_proba."""
+
             def predict(self, X):
                 X = np.asarray(X, dtype=np.float64)
                 return ForecastResult(
@@ -1033,9 +1021,7 @@ class TestEnsembleForecasterExtended:
         m1 = self._make_model(2.0)
         m1.fit(np.zeros((5, 3)), np.zeros(5))
         fail_m = _PredictProbaFailModel()
-        ens = self.EnsembleForecaster(
-            models=[m1, fail_m], method="mean"
-        )
+        ens = self.EnsembleForecaster(models=[m1, fail_m], method="mean")
         ens.fit(np.zeros((5, 3)), np.zeros(5))
         res = ens.predict_proba(np.ones((3, 3)), quantiles=[0.5])
         assert "q0.5" in res.quantiles
@@ -1048,9 +1034,7 @@ class TestEnsembleForecasterExtended:
             def predict_proba(self, X, quantiles=None):
                 raise RuntimeError("fail")
 
-        ens = self.EnsembleForecaster(
-            models=[_FailingModel(), _FailingModel()], method="mean"
-        )
+        ens = self.EnsembleForecaster(models=[_FailingModel(), _FailingModel()], method="mean")
         ens.fit(np.zeros((5, 3)), np.zeros(5))
         with pytest.raises(RuntimeError, match="All models failed"):
             ens._collect_deterministic(np.ones((3, 3)))
@@ -1066,9 +1050,7 @@ class TestEnsembleForecasterExtended:
         m1 = self._make_model(5.0)
         m1.fit(np.zeros((5, 3)), np.zeros(5))
         # Only one model — the failing one is never added
-        ens = self.EnsembleForecaster(
-            models=[m1], method="mean"
-        )
+        ens = self.EnsembleForecaster(models=[m1], method="mean")
         ens.fit(np.zeros((5, 3)), np.zeros(5))
         res = ens.predict(np.ones((3, 3)))
         assert res.deterministic.shape == (3, 1)
@@ -1144,48 +1126,58 @@ class TestEnsembleForecasterExtended:
 class TestModelPackageInit:
     def test_import_base_models(self):
         from pakhi.models import BaseModel, ForecastResult, StandardScaler
+
         assert BaseModel is not None
         assert ForecastResult is not None
         assert StandardScaler is not None
 
     def test_import_persistence(self):
         from pakhi.models import PersistenceModel
+
         assert PersistenceModel is not None
 
     def test_import_climatology(self):
         from pakhi.models import ClimatologyModel, anomalies_from_climatology, seasonal_climatology
+
         assert ClimatologyModel is not None
         assert anomalies_from_climatology is not None
         assert seasonal_climatology is not None
 
     def test_import_gradient(self):
         from pakhi.models import GradientForecaster
+
         assert GradientForecaster is not None
 
     def test_import_compute_metrics(self):
         from pakhi.models import compute_metrics, train_val_test_split
+
         assert compute_metrics is not None
         assert train_val_test_split is not None
 
     def test_lazy_import_lstm(self):
         from pakhi.models import LSTMForecaster
+
         assert LSTMForecaster is not None
 
     def test_lazy_import_gaussian(self):
         from pakhi.models import GaussianForecaster
+
         assert GaussianForecaster is not None
 
     def test_lazy_import_ensemble(self):
         from pakhi.models import EnsembleForecaster
+
         assert EnsembleForecaster is not None
 
     def test_invalid_attribute_raises(self):
         import pakhi.models as models_mod
+
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = models_mod.NonExistentModel
 
     def test_all_exports(self):
         import pakhi.models as models_mod
+
         for name in models_mod.__all__:
             assert hasattr(models_mod, name), f"{name} listed in __all__ but not accessible"
 
@@ -1511,6 +1503,7 @@ class TestGaussianGPyTorch:
 
     def test_gpytorch_backend_direct(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="gpytorch", n_inducing=20, max_optim_iter=2)
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1519,6 +1512,7 @@ class TestGaussianGPyTorch:
 
     def test_gpytorch_predict(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="gpytorch", n_inducing=20, max_optim_iter=2)
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1528,6 +1522,7 @@ class TestGaussianGPyTorch:
 
     def test_gpytorch_predict_proba(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="gpytorch", n_inducing=20, max_optim_iter=2)
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1538,6 +1533,7 @@ class TestGaussianGPyTorch:
 
     def test_gpytorch_score(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="gpytorch", n_inducing=20, max_optim_iter=2)
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1547,6 +1543,7 @@ class TestGaussianGPyTorch:
 
     def test_gpytorch_repr(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="gpytorch")
         assert "not fitted" in repr(model)
         model._init_backend()
@@ -1554,6 +1551,7 @@ class TestGaussianGPyTorch:
 
     def test_sklearn_backend_direct(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="sklearn")
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1563,6 +1561,7 @@ class TestGaussianGPyTorch:
 
     def test_sklearn_predict_proba(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="sklearn")
         X = np.random.randn(50, 3)
         y = np.random.randn(50)
@@ -1572,13 +1571,17 @@ class TestGaussianGPyTorch:
 
     def test_sklearn_repr(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="sklearn")
         model._init_backend()
         assert "sklearn" in repr(model)
 
     def test_no_backend_available(self):
         from pakhi.models.gaussian import GaussianForecaster
+
         model = GaussianForecaster(backend="sklearn")
-        with patch("pakhi.models.gaussian._has_sklearn_gp", return_value=False):
-            with pytest.raises(ImportError):
-                model._init_backend()
+        with (
+            patch("pakhi.models.gaussian._has_sklearn_gp", return_value=False),
+            pytest.raises(ImportError),
+        ):
+            model._init_backend()

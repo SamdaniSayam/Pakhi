@@ -1,11 +1,10 @@
 """Tests for pakhi.pipeline — RefreshScheduler."""
+
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
-
-import pytest
 
 from pakhi.pipeline.schedule import RefreshScheduler
 

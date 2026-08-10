@@ -100,9 +100,7 @@ class _GPyTorchModel:
             nu=2.5,
             ard_num_dims=n_features,
         )
-        kernel.lengthscale = torch.full(
-            (1, n_features), self.lengthscale_prior
-        )
+        kernel.lengthscale = torch.full((1, n_features), self.lengthscale_prior)
         self.model.covar_module = kernel
 
         self.model.mean_module = gpytorch.means.ConstantMean()

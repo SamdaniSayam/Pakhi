@@ -1,22 +1,23 @@
 """Tests for pakhi.viz — dashboard, ensemble, maps, timeseries."""
+
 from __future__ import annotations
+
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pytest
-from unittest.mock import patch, MagicMock
 
 from pakhi.viz.dashboard import TerminalDashboard
 from pakhi.viz.ensemble import plot_ensemble_plume
-from pakhi.viz.timeseries import (
-    plot_ensemble_spread,
-    plot_forecast_vs_obs,
-    plot_signal_history,
-)
 from pakhi.viz.maps import (
     plot_forecast_map,
     plot_heatmap,
     plot_track,
+)
+from pakhi.viz.timeseries import (
+    plot_ensemble_spread,
+    plot_forecast_vs_obs,
+    plot_signal_history,
 )
 
 
@@ -30,9 +31,12 @@ def _make_array(n=100):
 
 def _make_da():
     import xarray as xr
-    return xr.DataArray(np.random.randn(10, 10), dims=["latitude", "longitude"],
-                        coords={"latitude": np.linspace(30, 35, 10),
-                                "longitude": np.linspace(-90, -85, 10)})
+
+    return xr.DataArray(
+        np.random.randn(10, 10),
+        dims=["latitude", "longitude"],
+        coords={"latitude": np.linspace(30, 35, 10), "longitude": np.linspace(-90, -85, 10)},
+    )
 
 
 class TestTerminalDashboard:
@@ -50,8 +54,9 @@ class TestTerminalDashboard:
     @patch("pakhi.viz.dashboard.Console")
     def test_display_current_weather_full(self, MockConsole):
         d = TerminalDashboard(use_plotext=False)
-        d.display_current_weather(temp=32.5, wind=15.2, pressure=1012.3,
-                                 humidity=65.0, description="Sunny")
+        d.display_current_weather(
+            temp=32.5, wind=15.2, pressure=1012.3, humidity=65.0, description="Sunny"
+        )
         assert True
 
 
@@ -88,9 +93,7 @@ class TestTimeseriesViz:
     def test_plot_forecast_vs_obs_with_bands(self):
         fc = np.random.randn(50).cumsum()
         obs = np.random.randn(50).cumsum()
-        fig = plot_forecast_vs_obs(fc, obs,
-                                   confidence_lower=fc - 1.0,
-                                   confidence_upper=fc + 1.0)
+        fig = plot_forecast_vs_obs(fc, obs, confidence_lower=fc - 1.0, confidence_upper=fc + 1.0)
         assert fig is not None
 
     def test_plot_ensemble_spread(self):

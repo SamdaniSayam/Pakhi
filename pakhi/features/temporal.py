@@ -191,6 +191,7 @@ class TemporalFeatures:
         axis = arr.dims.index(time_dim)
 
         for w in self._windows_for(arr.sizes[time_dim]):
+
             def _apply_trend(a, _w=w):
                 out = np.full(a.shape, np.nan)
                 for i in range(_w - 1, len(a)):
@@ -289,7 +290,7 @@ class TemporalFeatures:
         for span in self.ema_spans:
             arr_xr = xr.DataArray(series.values, dims=["time"])
             ema_result = ema(arr_xr, span)
-            if hasattr(ema_result, 'values'):
+            if hasattr(ema_result, "values"):
                 ema_result = ema_result.values
             cols[f"{name}_ema_{span}"] = pd.Series(ema_result, index=series.index)
         return pd.DataFrame(cols, index=series.index)
@@ -299,9 +300,9 @@ class TemporalFeatures:
         for w in self._windows_for(len(series)):
             arr_xr = xr.DataArray(series.values, dims=["time"])
             ra = rolling_average(arr_xr, w)
-            if hasattr(ra, 'values'):
+            if hasattr(ra, "values"):
                 ra = ra.values
             padded = np.full(len(series), np.nan)
-            padded[w - 1:] = ra[:len(series) - w + 1]
+            padded[w - 1 :] = ra[: len(series) - w + 1]
             cols[f"{name}_rolling_{w}"] = pd.Series(padded, index=series.index)
         return pd.DataFrame(cols, index=series.index)

@@ -1,6 +1,5 @@
-import pytest
-import numpy as np
 from pakhi.risk.alerts import AlertManager, AlertSeverity
+
 
 def test_alerts_heatwave_low():
     mgr = AlertManager()
@@ -8,11 +7,13 @@ def test_alerts_heatwave_low():
     alert = mgr.check_heatwave({"temperature_forecast": temps}, threshold=38.0, days=2)
     assert alert.severity == AlertSeverity.LOW
 
+
 def test_alerts_drought_high():
     mgr = AlertManager()
     spi = [-2.5] * 30
     alert = mgr.check_drought({"spi_values": spi}, threshold=-1.5, days=30)
     assert alert.severity == AlertSeverity.HIGH
+
 
 def test_alerts_drought_low():
     mgr = AlertManager()

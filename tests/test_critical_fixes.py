@@ -6,7 +6,7 @@ anomaly detection rolling behavior, and walk-forward retraining.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -16,8 +16,7 @@ from pakhi.features.anomaly import AnomalyFeatures
 from pakhi.features.temporal import TemporalFeatures
 from pakhi.risk.backtest import BacktestEngine
 from pakhi.signals.base import Action, Signal, position_size
-from pakhi.trading.execution import PaperTrader, TradeDirection
-
+from pakhi.trading.execution import PaperTrader
 
 # ---------------------------------------------------------------------------
 # PaperTrader: invested capital must be returned on close
@@ -101,8 +100,12 @@ class TestPaperTraderCashManagement:
         trader = PaperTrader(initial_capital=100_000)
         ts = datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)
         signal = Signal(
-            action=Action.LONG, size=0.1, confidence=0.6,
-            instrument="TEST", timestamp=ts, reasoning="test",
+            action=Action.LONG,
+            size=0.1,
+            confidence=0.6,
+            instrument="TEST",
+            timestamp=ts,
+            reasoning="test",
         )
         trade = trader.execute(signal, current_price=50.0)
         closed = trader.close_position(trade.trade_id, price=55.0)
@@ -195,7 +198,11 @@ class TestAnomalyRolling:
         data[50] = 10.0  # inject spike
 
         import xarray as xr
-        ds = xr.Dataset({"temp": ("time", data)}, coords={"time": pd.date_range("2024-01-01", periods=100, freq="h")})
+
+        ds = xr.Dataset(
+            {"temp": ("time", data)},
+            coords={"time": pd.date_range("2024-01-01", periods=100, freq="h")},
+        )
 
         tf = TemporalFeatures(windows=[24], stats=["anomaly"])
         result = tf.build(ds, variables=["temp"])
@@ -211,13 +218,17 @@ class TestAnomalyRolling:
         data[50] = 10.0  # spike at 50
 
         import xarray as xr
-        ds = xr.Dataset({"temp": ("time", data)}, coords={"time": pd.date_range("2024-01-01", periods=100, freq="h")})
+
+        ds = xr.Dataset(
+            {"temp": ("time", data)},
+            coords={"time": pd.date_range("2024-01-01", periods=100, freq="h")},
+        )
 
         tf = TemporalFeatures(windows=[24], stats=["anomaly"])
 
         # Build on first 51 points (includes spike)
         result_51 = tf.build(ds.isel(time=slice(0, 51)), variables=["temp"])
-        flag_51 = result_51["temp_is_anomaly_24"].values[50]
+        result_51["temp_is_anomaly_24"].values[50]
 
         # Build on first 50 points (no spike yet)
         result_50 = tf.build(ds.isel(time=slice(0, 50)), variables=["temp"])
@@ -246,10 +257,14 @@ class TestWalkForward:
 
             def gen(data: pd.DataFrame, step: int) -> Signal:
                 return Signal(
-                    action=Action.FLAT, size=0.0, confidence=0.0,
-                    instrument="TEST", timestamp=datetime.now(timezone.utc),
+                    action=Action.FLAT,
+                    size=0.0,
+                    confidence=0.0,
+                    instrument="TEST",
+                    timestamp=datetime.now(timezone.utc),
                     reasoning="test",
                 )
+
             return gen
 
         engine = BacktestEngine()
@@ -258,7 +273,7 @@ class TestWalkForward:
         prices = 100 + np.cumsum(np.random.randn(400) * 0.5)
         data = pd.DataFrame({"close": prices}, index=dates)
 
-        results = engine.walk_forward(
+        engine.walk_forward(
             signal_generator=None,  # type: ignore
             data=data,
             train_window=100,
@@ -272,10 +287,14 @@ class TestWalkForward:
 
     def test_walk_forward_without_retrain(self):
         """Without retrain_fn, same signal_generator is reused."""
+
         def gen(data: pd.DataFrame, step: int) -> Signal:
             return Signal(
-                action=Action.FLAT, size=0.0, confidence=0.0,
-                instrument="TEST", timestamp=datetime.now(timezone.utc),
+                action=Action.FLAT,
+                size=0.0,
+                confidence=0.0,
+                instrument="TEST",
+                timestamp=datetime.now(timezone.utc),
                 reasoning="test",
             )
 

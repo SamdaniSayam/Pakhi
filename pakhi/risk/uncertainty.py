@@ -45,6 +45,7 @@ def ensemble_spread(ensemble_forecasts: np.ndarray) -> float:
         return float(np.nanstd(arr, ddof=1))
 
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         spreads = np.nanstd(arr, axis=1, ddof=1)

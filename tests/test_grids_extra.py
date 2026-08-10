@@ -1,4 +1,5 @@
 """Tests for pakhi.grids — coordinate, regridder, subset."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,8 +22,9 @@ def _make_da_2d(n_lat=10, n_lon=10):
     lats = np.linspace(30, 35, n_lat)
     lons = np.linspace(-90, -85, n_lon)
     data = np.random.randn(n_lat, n_lon)
-    return xr.DataArray(data, dims=["latitude", "longitude"],
-                        coords={"latitude": lats, "longitude": lons})
+    return xr.DataArray(
+        data, dims=["latitude", "longitude"], coords={"latitude": lats, "longitude": lons}
+    )
 
 
 class TestCoordinate:
@@ -74,11 +76,11 @@ class TestCoordinate:
         assert errors == []
 
     def test_validate_latlon_invalid(self):
-        valid, errors = validate_latlon(100.0, -88.0)
+        valid, _errors = validate_latlon(100.0, -88.0)
         assert not valid
 
     def test_validate_latlon_empty(self):
-        valid, errors = validate_latlon(np.array([]), np.array([]))
+        valid, _errors = validate_latlon(np.array([]), np.array([]))
         assert not valid
 
 

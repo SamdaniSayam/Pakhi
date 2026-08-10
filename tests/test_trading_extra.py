@@ -1,4 +1,5 @@
 """Tests for pakhi.trading — pnl, portfolio, instruments."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,18 +7,16 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from pakhi.trading.pnl import PnLResult, TradeLog, calculate_pnl, compute_equity_curve
-from pakhi.trading.portfolio import Portfolio, SizingMethod
 from pakhi.trading.instruments import (
-    Instrument,
-    NG_FUTURES,
-    OJ_FUTURES,
-    ZC_FUTURES,
-    ERCOT_FUTURES,
-    PJM_FUTURES,
     CAT_BONDS,
+    ERCOT_FUTURES,
+    OJ_FUTURES,
+    PJM_FUTURES,
+    ZC_FUTURES,
     get_instrument,
 )
+from pakhi.trading.pnl import PnLResult, TradeLog, calculate_pnl, compute_equity_curve
+from pakhi.trading.portfolio import Portfolio
 
 
 class TestEquityCurve:

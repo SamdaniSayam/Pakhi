@@ -1145,7 +1145,34 @@ class TestNOAATrulyDeep:
         ) as m:
             rows = conn._idx_offsets("https://example.com/grib")
             m.assert_called_once_with("https://example.com/grib.idx", timeout=conn.timeout)
-            assert rows == [(100, "TMP", "2 m above ground"), (999, "HGT", "500 mb")]
+            assert rows == [
+                (100, "TMP", "2 m above ground", "anl"),
+                (999, "HGT", "500 mb", "anl"),
+            ]
+
+    def test_fetch_archive_cycle_prefers_instant(self):
+        from pakhi.src.noaa import GFSConnector
+
+        conn = GFSConnector(variables=["temperature_2m", "precipitation"])
+        mock_ds = xr.Dataset({"t2m": (["lat", "lon"], np.random.randn(5, 5))})
+        idx_text = (
+            "1:100:d=2024011500:TMP:2 m above ground:anl:\n"
+            "2:1000:d=2024011500:PRATE:surface:24 hour fcst:\n"
+            "3:2000:d=2024011500:PRATE:surface:18-24 hour ave fcst:\n"
+        )
+        with (
+            patch.object(conn, "_idx_offsets", return_value=[
+                (100, "TMP", "2 m above ground", "anl"),
+                (1000, "PRATE", "surface", "24 hour fcst"),
+                (2000, "PRATE", "surface", "18-24 hour ave fcst"),
+            ]),
+            patch.object(conn, "_open_grib", return_value=mock_ds) as m,
+            patch.object(conn._session, "get", return_value=_mock_response(text=idx_text)),
+            patch("tempfile.gettempdir", return_value="/tmp"),
+        ):
+            out = conn._fetch_archive_cycle("20240115", "00", 0)
+            m.assert_called_once()
+            assert out is not None
 
 
 # === Deep CME tests ===

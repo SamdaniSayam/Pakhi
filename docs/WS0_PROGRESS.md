@@ -43,14 +43,35 @@ and the user is shown the running terminal live.
   Cached rerun 6.8s. Descending-latitude subset bug found & fixed.
 - Full suite: **1466 passed / 5 skipped**; ruff clean.
 
+### 2026-08-11 — T1 scaling + T2 (market layer) done
+- **Fixed cache-naming bug** (tuple unpacking order in `_fetch_archive_cycle` — produced
+  var-named 0-byte files → "No valid message found"). Added `_range_get_with_retry`
+  (transient `RemoteDisconnected` hit) and instant-over-average record selection
+  (PRATE has `N hour fcst` + `N-M hour ave fcst` at f024+; we take the instantaneous one).
+- **Parallelized backfill** (`scripts/backfill_gfs.py`, 8 workers, resumable via
+  parquet-existence). Launched detached (setsid) for the full window:
+  **2021-11-01 → 2026-03-31, 12Z, leads f000/f012/f024/f048, 0p50, Florida bbox
+  [-84,25,-80,30] = 6448 cycles** (~11h background). 0 misses so far.
+- **T2 DONE:** OJ=F + NG=F daily 2015→2026 (2918 rows each) saved to parquet.
+- **Roll calendar:** ICE FCOJ specs verified (odd months, 15,000 lbs, tick 0.05¢,
+  FND = 1st biz day of contract month, LTD = 15th-last biz day). Calendar generated
+  with US-federal holidays minus Veterans Day (ICE does not observe it) — **matches
+  ICE's published expiry table exactly** (Jul26=7/13, Sep26=9/10, Nov26=11/9, …).
+  36 contracts, 2021–2026, saved to `data/market/oj_contract_calendar.csv`.
+- **Spot-check finding (honest):** the signal docstring claims "15–40% OJ spikes
+  within 48h" from freezes — real data shows the Jan-2022 freeze was small (~143→161);
+  the big 5-day moves are 2025-04-14 (+43.6%), 2025-07-11 (+42.9%), max close 555.5 on
+  2024-09-06 (hurricane). G0 will judge the real relationship — it may refute the
+  synthetic backtest.
+
 ## Status board
 
 | Task | Status | Notes |
 |---|---|---|
 | T0 Wedge decision | **DONE** | OJ primary / ERCOT backup |
-| T1 Weather layer | in progress | AWS byte-range proven; scaling backfill next |
-| T2 Market layer | pending | Yahoo verified; roll schedule next |
-| T3 Continuous contracts | pending | |
+| T1 Weather layer | **running** | full backfill in background (~11h); byte-range proven |
+| T2 Market layer | **DONE** | Yahoo parquets + ICE-verified roll calendar |
+| T3 Continuous contracts | pending | after T1 lands |
 | T4 PIT dataset | pending | |
 | T5 Reproducibility + DQ | pending | |
 | T6 G0 handoff | pending | |

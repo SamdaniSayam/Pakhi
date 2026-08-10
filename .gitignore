@@ -53,6 +53,9 @@ data/cache/
 data/sample/*.grib
 data/sample/*.nc
 data/sample/*.zarr
+data/gfs/*.parquet
+data/gfs/cycle_inventory.csv
+data/market/*_daily.parquet
 
 # OS
 .DS_Store

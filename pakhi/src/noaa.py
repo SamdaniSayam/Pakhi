@@ -214,15 +214,16 @@ class GFSConnector:
         file = f"gfs.t{cycle}z.pgrb2.{self.resolution}.f{forecast_hour:03d}"
         return f"{AWS_GFS_URL}/gfs.{date}/{cycle}/atmos/{file}"
 
-    def _idx_offsets(self, url: str) -> list[tuple[int, str, str]]:
-        """Fetch a GRIB index and return (byte_start, variable, level) rows."""
+    def _idx_offsets(self, url: str) -> list[tuple[int, str, str, str]]:
+        """Fetch a GRIB index and return (byte_start, variable, level, ftype) rows."""
         resp = self._session.get(url + ".idx", timeout=self.timeout)
         resp.raise_for_status()
-        rows: list[tuple[int, str, str]] = []
+        rows: list[tuple[int, str, str, str]] = []
         for line in resp.text.splitlines():
             parts = line.split(":")
             if len(parts) >= 5:
-                rows.append((int(parts[1]), parts[3], parts[4]))
+                ftype = parts[5] if len(parts) > 5 else ""
+                rows.append((int(parts[1]), parts[3], parts[4], ftype))
         return rows
 
     def _fetch_archive_cycle(
@@ -249,30 +250,65 @@ class GFSConnector:
             for abbrev in cfg["var"].split(":"):
                 wanted.add((abbrev, cfg["lev"]))
 
-        by_level: dict[str, list[tuple[int, int | None]]] = {}
-        for i, (start, var, lev) in enumerate(rows):
+        # Prefer instantaneous records over averaged ones (e.g. PRATE appears
+        # both as "N hour fcst" and "N-M hour ave fcst" at f024+).
+        matches: dict[tuple[str, str], list[int]] = {}
+        for i, (_start, var, lev, _ftype) in enumerate(rows):
             if (var, lev) in wanted:
-                end = starts[i + 1] - 1 if i + 1 < len(starts) else None
-                by_level.setdefault(lev, []).append((start, end))
+                matches.setdefault((var, lev), []).append(i)
+        selected: list[tuple[int, str, str]] = []
+        for (var, lev), idxs in matches.items():
+            idxs = sorted(idxs, key=lambda j: "ave" in rows[j][3].lower())
+            i = idxs[0]
+            selected.append((starts[i], var, lev))
+        selected.sort(key=lambda r: r[0])
 
-        if not by_level:
+        if not selected:
             raise RuntimeError(f"No requested variables found in {obj}")
 
+        # end offset of each selected message = next message start in the file
+        end_by_start: dict[int, int | None] = {}
+        for i, start in enumerate(starts):
+            end_by_start[start] = starts[i + 1] - 1 if i + 1 < len(starts) else None
+
         paths: list[Path] = []
-        for lev, spans in by_level.items():
+        seen_levels: set[str] = set()
+        for start, var, lev in selected:
+            if lev in seen_levels:
+                continue
+            seen_levels.add(lev)
+            spans = [(s, end_by_start[s]) for s, v, l in selected if l == lev]
             safe = lev.replace(" ", "_")
             dest = self.cache_dir / f"aws_{date}_{cycle}z_f{forecast_hour:03d}_{safe}.grib2"
             if not (dest.exists() and dest.stat().st_size > 0):
                 blob = bytearray()
-                for start, end in spans:
-                    headers = {"Range": f"bytes={start}-{end}"} if end is not None else {"Range": f"bytes={start}-"}
-                    resp = self._session.get(obj, headers=headers, timeout=self.timeout)
-                    resp.raise_for_status()
+                for span_start, end in spans:
+                    headers = (
+                        {"Range": f"bytes={span_start}-{end}"}
+                        if end is not None
+                        else {"Range": f"bytes={span_start}-"}
+                    )
+                    resp = self._range_get_with_retry(obj, headers)
                     blob.extend(resp.content)
                 dest.write_bytes(bytes(blob))
             paths.append(dest)
 
         return self._open_grib(paths)
+
+    def _range_get_with_retry(self, url: str, headers: dict[str, str]) -> requests.Response:
+        """GET a byte range with retry and exponential backoff."""
+        last_exc: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                resp = self._session.get(url, headers=headers, timeout=self.timeout)
+                resp.raise_for_status()
+                return resp
+            except requests.RequestException as exc:
+                last_exc = exc
+                logger.debug("Range GET attempt %d/%d failed: %s", attempt, self.max_retries, exc)
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_delay * (2 ** (attempt - 1)))
+        raise ConnectionError(f"Failed to fetch byte range from {url}") from last_exc
 
     def _subset_bbox(self, ds: xr.Dataset) -> xr.Dataset:
         """Subset a full-grid Dataset to the configured bounding box."""

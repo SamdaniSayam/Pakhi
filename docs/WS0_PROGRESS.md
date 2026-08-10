@@ -64,6 +64,25 @@ and the user is shown the running terminal live.
   2024-09-06 (hurricane). G0 will judge the real relationship — it may refute the
   synthetic backtest.
 
+### 2026-08-11 — T3 (continuous contracts) DONE
+- **Provenance check first:** Yahoo's raw `OJ=F` chain shows no systematic roll
+  artifacts at FND — only 1/20 largest daily moves lands within ±2d of a First
+  Notice Day → the big moves (Jul/Oct 2025 freezes, 2026-06-30) are real events.
+  Individual ICE contract-month tickers (OJH26, …) are NOT on Yahoo → the chain is
+  built from the continuous series with documented assumptions.
+- **`pakhi/ws0/roll.py`** (new, tested): `front_month_map` (FND: roll *on* FND;
+  LTD: roll *after* LTD), `back_adjust` (removes roll-date gaps below 5σ-of-prior-
+  vol; flags larger ones as real events and never deletes them), `roll_jump_assertion`
+  (flags any >5σ move within ±3d of a roll). Vol uses the **signed-return** rolling σ
+  at the day *before* the move (avoids self-contamination); degenerate flat regime
+  uses a nominal 1.5× threshold. (Two consistency bugs found+fixed during build:
+  log-space threshold with threshold<1; abs-return vs signed-return σ mismatch.)
+- **Outputs:** `data/market/oj_continuous.parquet` (back-adjusted + raw), 
+  `oj_roll_provenance.csv` (22 rolls 2022-12→2026-08, each with factor + flag),
+  `oj_roll_assertions.csv` (1 real event flagged: 2023-11-02 −7.5% @5.4σ).
+  Build script: `scripts/build_continuous.py`.
+- Full suite: **1474 passed / 5 skipped**; ruff clean.
+
 ## Status board
 
 | Task | Status | Notes |
@@ -71,7 +90,7 @@ and the user is shown the running terminal live.
 | T0 Wedge decision | **DONE** | OJ primary / ERCOT backup |
 | T1 Weather layer | **running** | full backfill in background (~11h); byte-range proven |
 | T2 Market layer | **DONE** | Yahoo parquets + ICE-verified roll calendar |
-| T3 Continuous contracts | pending | after T1 lands |
+| T3 Continuous contracts | **DONE** | roll.py + provenance; 22 rolls back-adjusted, 1 real event flagged |
 | T4 PIT dataset | pending | |
 | T5 Reproducibility + DQ | pending | |
 | T6 G0 handoff | pending | |

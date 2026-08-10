@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 NOMADS_GFS_URL = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_{res}.pl"
 
+# NOAA Big Data Program mirror (as-published operational archive). NOMADS only
+# retains ~10 days of cycles; this S3 bucket holds the full archive back to 2021.
+AWS_GFS_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
+
 GFS_VARIABLE_MAP: dict[str, dict[str, Any]] = {
     "temperature_2m": {
         "var": "TMP",
@@ -205,6 +209,84 @@ class GFSConnector:
         query_parts = [f"{k}={v}" for k, v in params.items()]
         return url + "?" + "&".join(query_parts)
 
+    def _object_url(self, date: str, cycle: str, forecast_hour: int) -> str:
+        """Return the NOAA AWS archive object URL for a GFS cycle file."""
+        file = f"gfs.t{cycle}z.pgrb2.{self.resolution}.f{forecast_hour:03d}"
+        return f"{AWS_GFS_URL}/gfs.{date}/{cycle}/atmos/{file}"
+
+    def _idx_offsets(self, url: str) -> list[tuple[int, str, str]]:
+        """Fetch a GRIB index and return (byte_start, variable, level) rows."""
+        resp = self._session.get(url + ".idx", timeout=self.timeout)
+        resp.raise_for_status()
+        rows: list[tuple[int, str, str]] = []
+        for line in resp.text.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 5:
+                rows.append((int(parts[1]), parts[3], parts[4]))
+        return rows
+
+    def _fetch_archive_cycle(
+        self,
+        date: str,
+        cycle: str,
+        forecast_hour: int = 0,
+    ) -> xr.Dataset:
+        """Fetch a historical GFS cycle via byte-range extraction from AWS.
+
+        The NOAA archive stores full 0.25° GRIB2 files (~120 MB). Using the
+        GRIB index byte offsets we Range-GET only the messages this connector
+        needs (~1 MB/level), assemble per-level GRIB2 files, and parse with
+        cfgrib — a ~20x reduction that makes multi-year backfills tractable.
+        """
+        obj = self._object_url(date, cycle, forecast_hour)
+        rows = self._idx_offsets(obj)
+        rows.sort(key=lambda r: r[0])
+        starts = [r[0] for r in rows]
+
+        wanted: set[tuple[str, str]] = set()
+        for var_name in self.variables:
+            cfg = GFS_VARIABLE_MAP[var_name]
+            for abbrev in cfg["var"].split(":"):
+                wanted.add((abbrev, cfg["lev"]))
+
+        by_level: dict[str, list[tuple[int, int | None]]] = {}
+        for i, (start, var, lev) in enumerate(rows):
+            if (var, lev) in wanted:
+                end = starts[i + 1] - 1 if i + 1 < len(starts) else None
+                by_level.setdefault(lev, []).append((start, end))
+
+        if not by_level:
+            raise RuntimeError(f"No requested variables found in {obj}")
+
+        paths: list[Path] = []
+        for lev, spans in by_level.items():
+            safe = lev.replace(" ", "_")
+            dest = self.cache_dir / f"aws_{date}_{cycle}z_f{forecast_hour:03d}_{safe}.grib2"
+            if not (dest.exists() and dest.stat().st_size > 0):
+                blob = bytearray()
+                for start, end in spans:
+                    headers = {"Range": f"bytes={start}-{end}"} if end is not None else {"Range": f"bytes={start}-"}
+                    resp = self._session.get(obj, headers=headers, timeout=self.timeout)
+                    resp.raise_for_status()
+                    blob.extend(resp.content)
+                dest.write_bytes(bytes(blob))
+            paths.append(dest)
+
+        return self._open_grib(paths)
+
+    def _subset_bbox(self, ds: xr.Dataset) -> xr.Dataset:
+        """Subset a full-grid Dataset to the configured bounding box."""
+        w, s, e, n = self.bbox
+        if "longitude" in ds.coords:
+            lon0, lon1 = (w, e) if w >= 0 else (w + 360, e + 360)
+            ds = ds.sel(longitude=slice(lon0, lon1))
+        if "latitude" in ds.coords:
+            lat = ds.latitude.values
+            descending = len(lat) > 1 and lat[0] > lat[-1]
+            lat0, lat1 = (n, s) if descending else (s, n)
+            ds = ds.sel(latitude=slice(lat0, lat1))
+        return ds
+
     def _download_with_retry(self, url: str, dest: Path) -> Path:
         """Download a URL with retry and exponential backoff."""
         if dest.exists() and dest.stat().st_size > 0:
@@ -321,6 +403,7 @@ class GFSConnector:
         start: str,
         end: str,
         forecast_hour: int = 0,
+        source: Literal["auto", "nomads", "aws"] = "auto",
     ) -> xr.Dataset:
         """Fetch archived GFS data for model training.
 
@@ -328,6 +411,7 @@ class GFSConnector:
             start: Start date as "YYYY-MM-DD".
             end: End date as "YYYY-MM-DD".
             forecast_hour: Forecast lead time in hours.
+            source: "auto" (NOMADS first, AWS fallback), "nomads", or "aws".
 
         Returns:
             xarray.Dataset with a time dimension.
@@ -341,7 +425,21 @@ class GFSConnector:
             for cycle_hour in VALID_CYCLES:
                 cycle_str = f"{cycle_hour:02d}"
                 try:
-                    ds = self._fetch_forecast(date_str, cycle_str, forecast_hour)
+                    if source == "aws":
+                        ds = self._fetch_archive_cycle(date_str, cycle_str, forecast_hour)
+                    else:
+                        try:
+                            ds = self._fetch_forecast(date_str, cycle_str, forecast_hour)
+                        except ConnectionError:
+                            if source == "nomads":
+                                raise
+                            logger.warning(
+                                "NOMADS miss %s %sZ — falling back to AWS archive",
+                                date_str,
+                                cycle_str,
+                            )
+                            ds = self._fetch_archive_cycle(date_str, cycle_str, forecast_hour)
+                    ds = self._subset_bbox(ds)
                     ds = ds.expand_dims(
                         dim={"time": [np.datetime64(current.replace(hour=cycle_hour))]}
                     )

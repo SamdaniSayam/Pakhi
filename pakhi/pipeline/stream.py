@@ -106,7 +106,6 @@ class StreamingProcessor:
                 end = min(start + chunk_size, n_steps)
                 slice_obj = {time_dim: slice(start, end)}
                 chunk = ds.isel(**slice_obj)
-                chunk = chunk.compute() if hasattr(chunk, "chunks") and chunk.chunks else chunk
                 yield process_fn(chunk)
         finally:
             ds.close()
@@ -138,10 +137,15 @@ class StreamingProcessor:
         xr.Dataset
             Concatenated result of all processed chunks.
         """
-        chunks = list(self.process_chunks(data_path, process_fn, chunk_size))
-        if not chunks:
+        result = None
+        for chunk in self.process_chunks(data_path, process_fn, chunk_size):
+            if result is None:
+                result = chunk
+            else:
+                result = xr.concat([result, chunk], dim="time")
+        if result is None:
             raise ValueError("No chunks produced — empty dataset?")
-        return xr.concat(chunks, dim="time")
+        return result
 
     def process_stream(
         self,

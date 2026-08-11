@@ -273,11 +273,11 @@ class GFSConnector:
 
         paths: list[Path] = []
         seen_levels: set[str] = set()
-        for start, var, lev in selected:
+        for _start, _var, lev in selected:
             if lev in seen_levels:
                 continue
             seen_levels.add(lev)
-            spans = [(s, end_by_start[s]) for s, v, l in selected if l == lev]
+            spans = [(s, end_by_start[s]) for s, _v, lv in selected if lv == lev]
             safe = lev.replace(" ", "_")
             dest = self.cache_dir / f"aws_{date}_{cycle}z_f{forecast_hour:03d}_{safe}.grib2"
             if not (dest.exists() and dest.stat().st_size > 0):
@@ -333,11 +333,11 @@ class GFSConnector:
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.debug("Download attempt %d/%d: %s", attempt, self.max_retries, dest.name)
-                resp = self._session.get(url, timeout=self.timeout, stream=True)
-                resp.raise_for_status()
-                with open(dest, "wb") as f:
-                    for chunk in resp.iter_content(chunk_size=65536):
-                        f.write(chunk)
+                with self._session.get(url, timeout=self.timeout, stream=True) as resp:
+                    resp.raise_for_status()
+                    with open(dest, "wb") as f:
+                        for chunk in resp.iter_content(chunk_size=65536):
+                            f.write(chunk)
                 if dest.stat().st_size > 0:
                     return dest
                 logger.warning("Empty response for %s", dest.name)

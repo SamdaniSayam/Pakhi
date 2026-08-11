@@ -309,31 +309,24 @@ def _regrid_conservative(
 
     cos_lat_src = np.cos(np.radians(slat))
 
+    lat_overlap = np.maximum(0,
+        np.minimum(src_lat_edges_hi[:, None], tgt_lat_edges_hi[None, :])
+        - np.maximum(src_lat_edges_lo[:, None], tgt_lat_edges_lo[None, :])
+    )
+
+    lon_overlap = np.maximum(0,
+        np.minimum(src_lon_edges_hi[:, None], tgt_lon_edges_hi[None, :])
+        - np.maximum(src_lon_edges_lo[:, None], tgt_lon_edges_lo[None, :])
+    )
+
     for ti in range(n_tgt_lat):
         for tj in range(n_tgt_lon):
-            total_weight = 0.0
-            total_val = 0.0
-
-            for si in range(n_src_lat):
-                for sj in range(n_src_lon):
-                    if np.isnan(sv[si, sj]):
-                        continue
-
-                    lat_lo = max(src_lat_edges_lo[si], tgt_lat_edges_lo[ti])
-                    lat_hi = min(src_lat_edges_hi[si], tgt_lat_edges_hi[ti])
-                    lon_lo = max(src_lon_edges_lo[sj], tgt_lon_edges_lo[tj])
-                    lon_hi = min(src_lon_edges_hi[sj], tgt_lon_edges_hi[tj])
-
-                    if lat_lo >= lat_hi or lon_lo >= lon_hi:
-                        continue
-
-                    area_frac = ((lat_hi - lat_lo) / tgt_dlat) * ((lon_hi - lon_lo) / tgt_dlon)
-                    weight = area_frac * cos_lat_src[si]
-
-                    total_weight += weight
-                    total_val += sv[si, sj] * weight
-
-            if total_weight > 0:
-                result[ti, tj] = total_val / total_weight
+            lat_w = lat_overlap[:, ti] / tgt_dlat
+            lon_w = lon_overlap[:, tj] / tgt_dlon
+            weights = np.outer(lat_w, lon_w) * cos_lat_src[:, None]
+            valid = ~np.isnan(sv) & (weights > 0)
+            total_w = weights[valid].sum()
+            if total_w > 0:
+                result[ti, tj] = (sv[valid] * weights[valid]).sum() / total_w
 
     return result

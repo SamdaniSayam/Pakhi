@@ -708,7 +708,9 @@ def backtest(
 
             if trade.status == "open" and trade.trade_id not in ("FLAT", "SKIP"):
                 exit_price = prices[i] * (1 + rng.normal(0, 0.005))
-                closed = trader.close_position(trade.trade_id, exit_price)
+                closed = trader.close_position(
+                    trade.trade_id, exit_price, timestamp=start_dt + timedelta(days=i)
+                )
                 if closed.pnl is not None:
                     trade_log.append(
                         (

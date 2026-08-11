@@ -61,6 +61,12 @@ def test_noaa_fallback_direct(monkeypatch, tmp_path):
     gfs = GFSConnector(cache_dir=tmp_path)
 
     class MockEmptyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
         def raise_for_status(self):
             pass
 

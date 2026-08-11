@@ -52,7 +52,9 @@ def main() -> None:
         print(flags.head(10).to_string(index=False))
     else:
         print("assertions flagged: 0")
-    print(f"largest adj-vs-raw drift: {float((adj['close_adj']-adj['close_raw']).abs().max()):.3f}")
+    print(
+        f"largest adj-vs-raw drift: {float((adj['close_adj'] - adj['close_raw']).abs().max()):.3f}"
+    )
 
 
 if __name__ == "__main__":

@@ -57,10 +57,16 @@ def _compute_feature_importance_summary(
     elif hasattr(model, "get_score"):
         # XGBoost Booster
         scores = model.get_score(importance_type="gain")
-        n_features = max(int(k.replace("f", "")) for k in scores) + 1 if scores else 0
-        raw = np.zeros(n_features, dtype=np.float64)
-        for k, v in scores.items():
-            raw[int(k.replace("f", ""))] = v
+        try:
+            # Try numeric feature names (e.g., "f0", "f1", ...)
+            n_features = max(int(k.lstrip("f")) for k in scores) + 1 if scores else 0
+            raw = np.zeros(n_features, dtype=np.float64)
+            for k, v in scores.items():
+                raw[int(k.lstrip("f"))] = v
+        except ValueError:
+            # String feature names — return dict directly
+            total = sum(scores.values()) or 1.0
+            return {k: v / total for k, v in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
     else:
         return {}
 
@@ -225,8 +231,11 @@ class GradientForecaster(BaseModel):
         """Fit one model for a single quantile (or the mean)."""
         model = self._build_model(n_targets=1)
 
-        if self.backend == "xgboost" and quantile is not None:
-            model.set_params(quantile_alpha=quantile)
+        if quantile is not None:
+            if self.backend == "xgboost":
+                model.set_params(quantile_alpha=quantile)
+            else:
+                model.set_params(alpha=quantile)
 
         fit_kwargs: dict[str, Any] = {}
         if X_val is not None and y_val is not None:

@@ -70,7 +70,8 @@ def plot_forecast_vs_obs(
     if obs_dates is None:
         obs_dates = np.arange(len(observations))
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig = Figure(figsize=(12, 5))
+    ax = fig.add_subplot(1, 1, 1)
 
     ax.plot(obs_dates[:n], observations[:n], color="black", linewidth=1.2, label="Observations")
     ax.plot(forecast_dates[:n], forecast[:n], color="steelblue", linewidth=1.2, label="Forecast")
@@ -138,7 +139,8 @@ def plot_ensemble_spread(
     if obs_dates is None:
         obs_dates = np.arange(len(observations))
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig = Figure(figsize=(12, 5))
+    ax = fig.add_subplot(1, 1, 1)
 
     for i in range(n_members):
         ax.plot(
@@ -211,7 +213,8 @@ def plot_signal_history(
     if price_dates is None:
         price_dates = np.arange(n)
 
-    fig, ax1 = plt.subplots(figsize=(12, 5))
+    fig = Figure(figsize=(12, 5))
+    ax1 = fig.add_subplot(1, 1, 1)
 
     ax1.plot(price_dates[:n], prices[:n], color="black", linewidth=1.0, label="Price")
     ax1.set_ylabel(ylabel, color="black")

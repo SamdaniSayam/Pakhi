@@ -22,10 +22,11 @@ def test_maps_has_cartopy(monkeypatch):
         monkeypatch.setattr(maps, "ccrs", sys.modules["cartopy.crs"])
         monkeypatch.setattr(maps, "cfeature", sys.modules["cartopy.feature"])
 
-        # Mock plt.subplots to avoid matplotlib trying to interpret the mock projection
+        # Mock Figure to avoid matplotlib trying to interpret the mock projection
         mock_fig = MagicMock()
         mock_ax = MagicMock()
-        monkeypatch.setattr(maps.plt, "subplots", lambda **kwargs: (mock_fig, mock_ax))
+        mock_fig.add_subplot.return_value = mock_ax
+        monkeypatch.setattr(maps, "Figure", lambda **kwargs: mock_fig)
 
         data = np.random.rand(10, 10)
         plot_forecast_map(data)

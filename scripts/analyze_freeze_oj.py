@@ -46,7 +46,9 @@ def main() -> None:
         return
 
     print("=== 1. freeze_prob per season (wide-FL bbox) ===")
-    seas = pit.groupby("season")["freeze_prob"].agg(["count", "mean", "max", lambda s: (s > 0).sum()])
+    seas = pit.groupby("season")["freeze_prob"].agg(
+        ["count", "mean", "max", lambda s: (s > 0).sum()]
+    )
     seas.columns = ["days", "mean_prob", "max_prob", "days_with_freeze"]
     print(seas.to_string())
 
@@ -78,12 +80,24 @@ def main() -> None:
     print(b.to_string())
 
     print("\n=== 4. flagship events ===")
-    flags = ["2022-01-29", "2022-01-30", "2025-07-08", "2025-07-10", "2025-04-14", "2025-10-23", "2024-09-06"]
+    flags = [
+        "2022-01-29",
+        "2022-01-30",
+        "2025-07-08",
+        "2025-07-10",
+        "2025-04-14",
+        "2025-10-23",
+        "2024-09-06",
+    ]
     ev = pit[pit["date"].dt.strftime("%Y-%m-%d").isin(flags)]
     if ev.empty:
         print("  (dates fall on weekends/non-trading days or not yet backfilled)")
     else:
-        print(ev[["date", "season", "freeze_prob", "temperature_min", "fwd_return", "action"]].to_string(index=False))
+        print(
+            ev[
+                ["date", "season", "freeze_prob", "temperature_min", "fwd_return", "action"]
+            ].to_string(index=False)
+        )
 
     print("\n=== 5. effect size ===")
     rho, pval = stats.spearmanr(pit["freeze_prob"], pit["fwd_return"])
@@ -92,7 +106,9 @@ def main() -> None:
     flats = pit.loc[pit["action"] == Action.FLAT.value, "fwd_return"]
     if len(longs) and len(flats):
         t, tp = stats.ttest_ind(longs, flats, equal_var=False)
-        print(f"LONG n={len(longs)} mean={longs.mean()*100:+.2f}% | FLAT n={len(flats)} mean={flats.mean()*100:+.2f}% | t={t:+.2f} (p={tp:.3f})")
+        print(
+            f"LONG n={len(longs)} mean={longs.mean() * 100:+.2f}% | FLAT n={len(flats)} mean={flats.mean() * 100:+.2f}% | t={t:+.2f} (p={tp:.3f})"
+        )
     else:
         print("no LONG signals — signal never fired")
 

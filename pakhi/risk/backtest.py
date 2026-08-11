@@ -129,6 +129,8 @@ class BacktestEngine:
         if end is not None:
             prices = prices[prices.index <= pd.Timestamp(end)]
 
+        data = data.loc[prices.index]
+
         if len(prices) < 2:
             return BacktestResult()
 

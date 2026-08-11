@@ -974,6 +974,8 @@ class TestNOAATrulyDeep:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.iter_content = lambda chunk_size: [b"fakedata"]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = None
         with patch.object(conn._session, "get", return_value=mock_resp):
             result = conn._download_with_retry("http://test.com/data", dest)
             assert result.exists()
@@ -1124,25 +1126,25 @@ class TestNOAATrulyDeep:
 
         conn = GFSConnector(variables=["temperature_2m"], bbox=[-84, 25, -80, 30])
         ds = xr.Dataset(
-            {"t2m": (["lat", "lon"], np.arange(5 * 5).reshape(5, 5))},
+            {"t2m": (["latitude", "longitude"], np.arange(5 * 5).reshape(5, 5))},
             coords={
-                "latitude": ("lat", np.array([35.0, 32.0, 28.0, 24.0, 20.0])),
-                "longitude": ("lon", np.array([276.0, 278.0, 280.0, 282.0, 284.0])),
+                "latitude": np.array([35.0, 32.0, 28.0, 24.0, 20.0]),
+                "longitude": np.array([276.0, 278.0, 280.0, 282.0, 284.0]),
             },
         )
         out = conn._subset_bbox(ds)
-        assert out.sizes["lat"] == 1
-        assert out.sizes["lon"] == 3
+        assert out.sizes["latitude"] == 1
+        assert out.sizes["longitude"] == 3
         assert float(out.latitude.values[0]) == 28.0
 
     def test_idx_offsets_parse(self):
         from pakhi.src.noaa import GFSConnector
 
         conn = GFSConnector(variables=["temperature_2m"])
-        idx_text = "1:100:d=2024011500:TMP:2 m above ground:anl:\n2:999:d=2024011500:HGT:500 mb:anl:\n"
-        with patch.object(
-            conn._session, "get", return_value=_mock_response(text=idx_text)
-        ) as m:
+        idx_text = (
+            "1:100:d=2024011500:TMP:2 m above ground:anl:\n2:999:d=2024011500:HGT:500 mb:anl:\n"
+        )
+        with patch.object(conn._session, "get", return_value=_mock_response(text=idx_text)) as m:
             rows = conn._idx_offsets("https://example.com/grib")
             m.assert_called_once_with("https://example.com/grib.idx", timeout=conn.timeout)
             assert rows == [
@@ -1161,11 +1163,15 @@ class TestNOAATrulyDeep:
             "3:2000:d=2024011500:PRATE:surface:18-24 hour ave fcst:\n"
         )
         with (
-            patch.object(conn, "_idx_offsets", return_value=[
-                (100, "TMP", "2 m above ground", "anl"),
-                (1000, "PRATE", "surface", "24 hour fcst"),
-                (2000, "PRATE", "surface", "18-24 hour ave fcst"),
-            ]),
+            patch.object(
+                conn,
+                "_idx_offsets",
+                return_value=[
+                    (100, "TMP", "2 m above ground", "anl"),
+                    (1000, "PRATE", "surface", "24 hour fcst"),
+                    (2000, "PRATE", "surface", "18-24 hour ave fcst"),
+                ],
+            ),
             patch.object(conn, "_open_grib", return_value=mock_ds) as m,
             patch.object(conn._session, "get", return_value=_mock_response(text=idx_text)),
             patch("tempfile.gettempdir", return_value="/tmp"),

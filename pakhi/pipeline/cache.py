@@ -66,6 +66,8 @@ class WeatherCache:
         self.default_ttl_hours = default_ttl_hours
         self._index_path = self.cache_dir / ".index.json"
         self._lru: OrderedDict[str, float] = self._load_index()
+        self._dirty_count = 0
+        self._save_every = 10
 
     @staticmethod
     def hash_key(url: str, params: dict[str, Any] | None = None) -> str:
@@ -232,12 +234,18 @@ class WeatherCache:
     def _touch_lru(self, key: str) -> None:
         self._lru.pop(key, None)
         self._lru[key] = time.time()
-        self._save_index()
+        self._dirty_count += 1
+        if self._dirty_count >= self._save_every:
+            self._save_index()
+            self._dirty_count = 0
 
     def _remove(self, file_path: Path, key: str) -> None:
         file_path.unlink(missing_ok=True)
         self._lru.pop(key, None)
-        self._save_index()
+        self._dirty_count += 1
+        if self._dirty_count >= self._save_every:
+            self._save_index()
+            self._dirty_count = 0
 
     def _evict_if_needed(self) -> None:
         while self.size_mb > self.max_size_mb and self._lru:
@@ -246,6 +254,13 @@ class WeatherCache:
             oldest_path.unlink(missing_ok=True)
             logger.debug("Evicted cache entry %s", oldest_key[:12])
         self._save_index()
+        self._dirty_count = 0
+
+    def close(self) -> None:
+        """Flush any pending index changes to disk."""
+        if self._dirty_count > 0:
+            self._save_index()
+            self._dirty_count = 0
 
     def _load_index(self) -> OrderedDict[str, float]:
         if self._index_path.exists():

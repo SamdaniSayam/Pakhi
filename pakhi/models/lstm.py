@@ -292,7 +292,17 @@ class LSTMForecaster(BaseModel):
             dropout=self.dropout,
             forecast_horizon=self.forecast_horizon,
             mc_dropout=self.mc_dropout,
-        ).to(self.device)
+        )
+        try:
+            self._net = self._net.to(self.device)
+        except RuntimeError as e:
+            if "cuDNN" in str(e) or "CUDA" in str(e):
+                import logging
+                logging.getLogger(__name__).warning(f"CUDA initialization failed ({e}), falling back to CPU.")
+                self._device_request = "cpu"
+                self._net = self._net.to("cpu")
+            else:
+                raise
 
     def _make_loader(self, X: np.ndarray, y: np.ndarray):
         torch, _ = _lazy_torch()

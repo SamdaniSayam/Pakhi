@@ -81,7 +81,8 @@ def plot_ensemble_plume(
     if dates is None:
         dates = np.arange(n)
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig = Figure(figsize=(12, 5))
+    ax = fig.add_subplot(1, 1, 1)
 
     # 10-90% band
     ax.fill_between(dates, q10, q90, color=base_color, alpha=0.10, label="10–90%")
@@ -134,7 +135,8 @@ def plot_model_comparison(
     if n_metrics == 0:
         raise ValueError("metrics dict must contain at least one metric.")
 
-    fig, ax = plt.subplots(figsize=(max(8, n_models * 1.5), 5))
+    fig = Figure(figsize=(max(8, n_models * 1.5), 5))
+    ax = fig.add_subplot(1, 1, 1)
 
     x = np.arange(n_models)
     cmap = plt.cm.Set2

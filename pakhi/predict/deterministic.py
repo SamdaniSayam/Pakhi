@@ -285,11 +285,11 @@ class DeterministicPredictor:
         y_train = np.asarray(y_train, dtype=np.float64)
         n = len(y_train)
 
-        Y_matrix = np.zeros((n - steps + 1, steps), dtype=np.float64)
-        for h in range(steps):
-            Y_matrix[:, h] = y_train[h : h + n - steps + 1]
+        Y_matrix = np.zeros((n - steps, steps), dtype=np.float64)
+        for h in range(1, steps + 1):
+            Y_matrix[:, h - 1] = y_train[h : h + n - steps]
 
-        X_trimmed = X_train[: n - steps + 1]
+        X_trimmed = X_train[: n - steps]
         model_copy = self._clone_model(model)
         model_copy.fit(X_trimmed, Y_matrix)
         preds = model_copy.predict(features)

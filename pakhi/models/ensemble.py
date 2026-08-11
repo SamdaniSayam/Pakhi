@@ -128,9 +128,14 @@ class EnsembleForecaster(BaseModel):
                 rmse = 1e6
             rmses.append(rmse)
         rmses = np.array(rmses, dtype=np.float64)
-        # Negative softmax: lower RMSE → higher weight.
-        w = np.exp(-rmses)
-        w = w / w.sum()
+        neg_rmses = -rmses
+        neg_rmses -= neg_rmses.max()
+        w = np.exp(neg_rmses)
+        total = w.sum()
+        if total < 1e-300:
+            w = np.ones_like(w) / len(w)
+        else:
+            w = w / total
         return w
 
     def _fit_stacking_meta(self, X_val: np.ndarray, y_val: np.ndarray) -> None:

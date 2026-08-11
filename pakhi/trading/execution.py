@@ -196,7 +196,13 @@ class PaperTrader:
         """
         return list(self._open_trades.values())
 
-    def close_position(self, trade_id: str, price: float, fill_price: float | None = None) -> Trade:
+    def close_position(
+        self,
+        trade_id: str,
+        price: float,
+        fill_price: float | None = None,
+        timestamp: datetime | None = None,
+    ) -> Trade:
         """Close an open position at the given price.
 
         Parameters
@@ -236,8 +242,9 @@ class PaperTrader:
         else:
             pnl = (trade.entry_price - exit_price) * trade.quantity
 
+        from datetime import timezone
         trade.exit_price = exit_price
-        trade.exit_time = trade.entry_time  # use sim time, not wall clock
+        trade.exit_time = timestamp if timestamp is not None else datetime.now(timezone.utc)
         trade.pnl = pnl
         trade.status = "closed"
 

@@ -52,7 +52,6 @@ def _sha256(path: Path) -> str:
 def _run(name: str, script: str, *extra: str) -> dict:
     cmd = [sys.executable, str(SCRIPTS / script), *extra]
     res = subprocess.run(cmd, capture_output=True, text=True)
-    ok = res.returncode == 0
     out = (res.stdout or "").strip() or (res.stderr or "").strip()
     tail = out.splitlines()[-1] if out else ""
     return {"script": script, "rc": res.returncode, "tail": tail}
@@ -150,11 +149,29 @@ def main() -> None:
     WS0.mkdir(parents=True, exist_ok=True)
     # Deterministic rebuild steps. Backfill skips existing files (resumable).
     steps = [
-        _run("backfill", "backfill_gfs.py", "--start", BACKFILL["start"], "--end", BACKFILL["end"],
-             "--out", str(GFS), "--inventory", str(GFS / "cycle_inventory.csv"),
-             "--cycles", BACKFILL["cycles"], "--leads", BACKFILL["leads"],
-             "--bbox=" + BACKFILL["bbox"], "--resolution", BACKFILL["resolution"],
-             "--workers", "8", "--retries", "6"),
+        _run(
+            "backfill",
+            "backfill_gfs.py",
+            "--start",
+            BACKFILL["start"],
+            "--end",
+            BACKFILL["end"],
+            "--out",
+            str(GFS),
+            "--inventory",
+            str(GFS / "cycle_inventory.csv"),
+            "--cycles",
+            BACKFILL["cycles"],
+            "--leads",
+            BACKFILL["leads"],
+            "--bbox=" + BACKFILL["bbox"],
+            "--resolution",
+            BACKFILL["resolution"],
+            "--workers",
+            "8",
+            "--retries",
+            "6",
+        ),
         _run("continuous", "build_continuous.py"),
         _run("pit", "build_pit.py"),
     ]

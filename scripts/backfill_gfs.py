@@ -99,7 +99,14 @@ def _work(args: tuple) -> dict | None:
                 time.sleep(backoff)
             else:
                 logger.warning("MISS %s %sZ f%03d — %s", date_str, cycle_str, lead, exc)
-                return {"date": date_str, "cycle": cycle_str, "lead": lead, "file": "", "source": "MISS", "nbytes": 0}
+                return {
+                    "date": date_str,
+                    "cycle": cycle_str,
+                    "lead": lead,
+                    "file": "",
+                    "source": "MISS",
+                    "nbytes": 0,
+                }
     return None  # pragma: no cover
 
 
@@ -114,7 +121,9 @@ def main() -> None:
     parser.add_argument("--out", default="data/gfs", help="Output directory")
     parser.add_argument("--inventory", default="data/gfs/cycle_inventory.csv", help="Inventory CSV")
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--retries", type=int, default=6, help="Whole-job retry attempts w/ backoff")
+    parser.add_argument(
+        "--retries", type=int, default=6, help="Whole-job retry attempts w/ backoff"
+    )
     args = parser.parse_args()
 
     cycles = [c.strip().zfill(2) for c in args.cycles.split(",") if c.strip()]
@@ -125,8 +134,21 @@ def main() -> None:
     inventory_path = Path(args.inventory)
 
     dates = pd.date_range(args.start, args.end, freq="D")
-    jobs = [(d.strftime("%Y%m%d"), c, lead, bbox, args.resolution, WS0_VARIABLES, str(out), args.retries)
-            for d in dates for c in cycles for lead in leads]
+    jobs = [
+        (
+            d.strftime("%Y%m%d"),
+            c,
+            lead,
+            bbox,
+            args.resolution,
+            WS0_VARIABLES,
+            str(out),
+            args.retries,
+        )
+        for d in dates
+        for c in cycles
+        for lead in leads
+    ]
     existing = {f.name for f in out.glob("gfs_*.parquet")}
     jobs = [
         j
@@ -143,7 +165,9 @@ def main() -> None:
 
     rows = []
     t_start = time.time()
-    with Pool(args.workers, initializer=_worker_init, initargs=(bbox, args.resolution, WS0_VARIABLES)) as pool:
+    with Pool(
+        args.workers, initializer=_worker_init, initargs=(bbox, args.resolution, WS0_VARIABLES)
+    ) as pool:
         for i, row in enumerate(pool.imap_unordered(_work, jobs), 1):
             if row is not None:
                 rows.append(row)

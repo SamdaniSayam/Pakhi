@@ -259,18 +259,20 @@ class TemporalFeatures:
     def _trend_pd(self, series: pd.Series, name: str) -> pd.DataFrame:
         cols: dict[str, pd.Series] = {}
         for w in self._windows_for(len(series)):
+            x = np.arange(w, dtype=np.float64)
+            sum_x = x.sum()
+            sum_x2 = (x ** 2).sum()
+            n = float(w)
+            denom = n * sum_x2 - sum_x ** 2
 
-            def _slope(window: np.ndarray) -> float:
-                if len(window) < 2 or np.all(np.isnan(window)):
-                    return np.nan
-                x = np.arange(len(window), dtype=np.float64)
-                mask = ~np.isnan(window)
-                if mask.sum() < 2:
-                    return np.nan
-                coeffs = np.polyfit(x[mask], window[mask], 1)
-                return float(coeffs[0])
-
-            cols[f"{name}_trend_{w}"] = series.rolling(w, min_periods=3).apply(_slope, raw=True)
+            if abs(denom) < 1e-15:
+                cols[f"{name}_trend_{w}"] = pd.Series(np.nan, index=series.index)
+            else:
+                sum_xy = series.rolling(w, min_periods=3).apply(
+                    lambda y: np.dot(x[:len(y)], y), raw=True
+                )
+                sum_y = series.rolling(w, min_periods=3).sum()
+                cols[f"{name}_trend_{w}"] = (n * sum_xy - sum_x * sum_y) / denom
         return pd.DataFrame(cols, index=series.index)
 
     def _anomaly_pd(self, series: pd.Series, name: str) -> pd.DataFrame:

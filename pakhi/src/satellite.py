@@ -289,12 +289,15 @@ class GOESConnector:
                         continue
                     path = self._download_s3_file(key)
                     ds = self._open_netcdf(path)
-                    if "brightness_temperature" in ds:
-                        bt = ds["brightness_temperature"].values
-                        if bt.ndim > 2:
-                            bt = bt.squeeze()
-                        images.append(np.asarray(bt, dtype=np.float32))
-                        break
+                    try:
+                        if "brightness_temperature" in ds:
+                            bt = ds["brightness_temperature"].values
+                            if bt.ndim > 2:
+                                bt = bt.squeeze()
+                            images.append(np.asarray(bt, dtype=np.float32))
+                            break
+                    finally:
+                        ds.close()
             except Exception as exc:
                 logger.warning("Failed to load image at %s: %s", ts, exc)
                 continue

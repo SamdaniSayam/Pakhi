@@ -68,7 +68,7 @@ def freeze_features(
     valid = pd.to_datetime(frame["valid_time"], utc=True)
     t2m = frame["t2m"].astype(float)
     horizon_end = pd.Timestamp(current_time) + pd.Timedelta(hours=horizon_hours)
-    in_horizon = valid <= horizon_end
+    in_horizon = (valid >= pd.Timestamp(current_time)) & (valid <= horizon_end)
 
     cold = t2m[in_horizon] < freeze_kelvin
     freeze_prob = float(cold.sum() / max(int(in_horizon.sum()), 1))
@@ -96,5 +96,7 @@ def load_cycle(parquet: str) -> pd.DataFrame:
     """Load a single backfilled GFS cycle parquet (multi-run safety)."""
     df = pd.read_parquet(parquet)
     if "date" in df.columns:
-        df = df.loc[(df["date"].astype(str).str[:8].astype(int) == int(parquet.split("gfs_")[1][:8]))]
+        df = df.loc[
+            (df["date"].astype(str).str[:8].astype(int) == int(parquet.split("gfs_")[1][:8]))
+        ]
     return df

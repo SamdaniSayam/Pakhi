@@ -108,7 +108,7 @@ class TestPaperTraderCashManagement:
             reasoning="test",
         )
         trade = trader.execute(signal, current_price=50.0)
-        closed = trader.close_position(trade.trade_id, price=55.0)
+        closed = trader.close_position(trade.trade_id, price=55.0, timestamp=ts)
         assert closed.exit_time == ts
 
 

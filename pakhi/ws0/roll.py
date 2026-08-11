@@ -103,7 +103,7 @@ def back_adjust(
     rets = front_series.pct_change()
     sigma = rets.rolling(sigma_window, min_periods=10).std()
     trigger_col = "first_notice_day" if roll_rule == "FND" else "last_trading_day"
-    calendar_sorted = calendar.sort_values(trigger_col)
+    calendar_sorted = calendar.sort_values(trigger_col).reset_index(drop=True)
     provenance: list[RollProvenance] = []
 
     for idx, row in calendar_sorted.iterrows():
@@ -126,9 +126,7 @@ def back_adjust(
         provenance.append(
             RollProvenance(
                 roll_date=roll_dt.date(),
-                contract_from=str(calendar_sorted["month_name"].iloc[idx - 1])
-                if idx > 0
-                else "",
+                contract_from=str(calendar_sorted["month_name"].iloc[idx - 1]) if idx > 0 else "",
                 contract_to=str(row["month_name"]),
                 adjustment_type="back" if not flagged else "none",
                 factor=float(gap),
@@ -156,8 +154,9 @@ def roll_jump_assertion(
     sigma = rets.rolling(sigma_window, min_periods=10).std()
     flagged: list[dict] = []
     for roll_dt in roll_dates:
-        near = pd.date_range(roll_dt - pd.Timedelta(days=window_days),
-                             roll_dt + pd.Timedelta(days=window_days))
+        near = pd.date_range(
+            roll_dt - pd.Timedelta(days=window_days), roll_dt + pd.Timedelta(days=window_days)
+        )
         for d in prices.index.intersection(near):
             i = prices.index.get_loc(d)
             sig = sigma.iloc[i - 1] if i >= 1 else np.nan

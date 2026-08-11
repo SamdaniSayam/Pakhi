@@ -76,10 +76,8 @@ def plot_forecast_map(
         lons = np.linspace(0, 360, nx)
 
     if _HAS_CARTOPY:
-        fig, ax = plt.subplots(
-            figsize=(12, 6),
-            subplot_kw={"projection": ccrs.PlateCarree()},
-        )
+        fig = Figure(figsize=(12, 6))
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
         ax.add_feature(cfeature.BORDERS, linewidth=0.3)
         ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
@@ -95,7 +93,8 @@ def plot_forecast_map(
         )
         ax.set_title(title, fontsize=13, fontweight="bold")
     else:
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig = Figure(figsize=(12, 6))
+        ax = fig.add_subplot(1, 1, 1)
         lon_grid, lat_grid = np.meshgrid(lons, lats)
         cf = ax.pcolormesh(lon_grid, lat_grid, data, cmap=cmap, shading="auto")
         ax.set_xlabel("Longitude")
@@ -143,10 +142,8 @@ def plot_track(
     track_lons = np.asarray(track_lons)
 
     if _HAS_CARTOPY:
-        fig, ax = plt.subplots(
-            figsize=(10, 8),
-            subplot_kw={"projection": ccrs.PlateCarree()},
-        )
+        fig = Figure(figsize=(12, 6))
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
         ax.add_feature(cfeature.BORDERS, linewidth=0.3)
         ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
@@ -175,7 +172,8 @@ def plot_track(
         )
         ax.set_title(title, fontsize=13, fontweight="bold")
     else:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig = Figure(figsize=(10, 8))
+        ax = fig.add_subplot(1, 1, 1)
         cone_xy = np.column_stack([cone_lons, cone_lats])
         from matplotlib.patches import Polygon
 
@@ -242,7 +240,8 @@ def plot_heatmap(
     ny, nx = data.shape
 
     fig_height = max(4, ny * 0.45)
-    fig, ax = plt.subplots(figsize=(max(6, nx * 0.8), fig_height))
+    fig = Figure(figsize=(max(6, nx * 0.8), fig_height))
+    ax = fig.add_subplot(1, 1, 1)
 
     kwargs: dict = {"cmap": cmap}
     if vmin is not None:

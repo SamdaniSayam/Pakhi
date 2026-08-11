@@ -57,13 +57,15 @@ def main() -> None:
 
     if n_long:
         long_ret = ev.loc[ev["action"] == Action.LONG.value, "fwd_return"]
-        print(f"LONG days mean fwd return: {long_ret.mean()*100:+.2f}%  (n={len(long_ret)})")
+        print(f"LONG days mean fwd return: {long_ret.mean() * 100:+.2f}%  (n={len(long_ret)})")
     flat = ev.loc[ev["action"] == Action.FLAT.value, "fwd_return"]
-    print(f"FLAT days mean fwd return:  {flat.mean()*100:+.2f}%  (n={len(flat)})")
+    print(f"FLAT days mean fwd return:  {flat.mean() * 100:+.2f}%  (n={len(flat)})")
 
     cold = ev[ev["freeze_prob"] > 0.0]
-    print(f"\nany sub-freezing cells forecast: {len(cold)} days "
-          f"(max freeze_prob={cold['freeze_prob'].max() if len(cold) else 0:.3f})")
+    print(
+        f"\nany sub-freezing cells forecast: {len(cold)} days "
+        f"(max freeze_prob={cold['freeze_prob'].max() if len(cold) else 0:.3f})"
+    )
     top = ev.nlargest(8, "fwd_return")
     print("\nlargest forward OJ moves:")
     print(top[["date", "freeze_prob", "t2m_min_c", "fwd_return"]].to_string(index=False))

@@ -32,7 +32,7 @@ def main() -> None:
     adj = pd.read_parquet(MARKET / "oj_continuous.parquet").reset_index()
     adj["Date"] = pd.to_datetime(adj["Date"])
     px = adj.set_index("Date")["close_adj"].sort_index()
-    ojd = px.resample("D").last().ffill()
+    ojd = px  # Keep only actual trading days
 
     files = sorted(GFS.glob("gfs_*_12z_f000*.parquet"))
     rows = []
@@ -42,13 +42,17 @@ def main() -> None:
         leads = sorted(GFS.glob(prefix + "f*.parquet"))
         frame = pd.concat([pd.read_parquet(p) for p in leads], ignore_index=True)
         feats = freeze_features(frame)
+        
+        # Get next available trading close
         nxt = ojd.index[ojd.index > cycle_date]
-        if nxt.empty:
+        # Get last available trading close (current or previous day)
+        prev = ojd.index[ojd.index <= cycle_date]
+        
+        if nxt.empty or prev.empty:
             continue
+            
         next_close = float(ojd.loc[nxt[0]])
-        cur = float(ojd.get(cycle_date, np.nan))
-        if np.isnan(cur):
-            continue
+        cur = float(ojd.loc[prev[-1]])
         rows.append(
             {
                 "date": cycle_date.date(),
@@ -68,16 +72,27 @@ def main() -> None:
 
     pit = pd.DataFrame(rows)
     pit.to_parquet(OUT / "freeze_pit.parquet", index=False)
-    print(f"PIT rows: {len(pit)}  {pit['date'].min()} -> {pit['date'].max()}" if len(pit) else "PIT rows: 0")
+    print(
+        f"PIT rows: {len(pit)}  {pit['date'].min()} -> {pit['date'].max()}"
+        if len(pit)
+        else "PIT rows: 0"
+    )
     if len(pit) >= 2:
         cold = pit[pit["freeze_prob"] > 0.2]
         hot = pit[pit["freeze_prob"] == 0]
         print(f"freeze_prob>0.2: {len(cold)} rows | all-clear: {len(hot)} rows")
-        print("mean fwd return | freeze_prob>0.2: "
-              f"{cold['fwd_return'].mean()*100:+.2f}%  all-clear: {hot['fwd_return'].mean()*100:+.2f}%"
-              if len(cold) >= 2 else "not enough cold rows")
+        print(
+            "mean fwd return | freeze_prob>0.2: "
+            f"{cold['fwd_return'].mean() * 100:+.2f}%  all-clear: {hot['fwd_return'].mean() * 100:+.2f}%"
+            if len(cold) >= 2
+            else "not enough cold rows"
+        )
         if len(cold):
-            print(cold.nlargest(5, "fwd_return")[["date", "temperature_min", "freeze_prob", "fwd_return"]].to_string(index=False))
+            print(
+                cold.nlargest(5, "fwd_return")[
+                    ["date", "temperature_min", "freeze_prob", "fwd_return"]
+                ].to_string(index=False)
+            )
 
 
 if __name__ == "__main__":

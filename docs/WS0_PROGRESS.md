@@ -98,14 +98,38 @@ and the user is shown the running terminal live.
   - Jul-2025 (+12.9%/+11.6% days): FL t2m **+23.9°C**, zero freeze cells. Not
     freeze-driven (Brazil crop).
   - Apr-2025 (+43.6% in 5d): FL t2m +10–14°C, zero freeze cells. Not freeze-driven.
-  - **VERDICT so far: REFUTED-dormant** — across 117 PIT days (2021-11→2022-02)
-    `freeze_prob` maxes at 0.131 (< 0.6 entry), so FreezeSignal fires **0 LONGs**;
-    all large OJ moves had zero freeze forecast. The "15–40% OJ spike within 48h
-    of freeze" docstring claim is **not** a tradable rule on this real PIT data.
-    (Caveat: bbox [-84,25,-80,30] may miss north-FL hard freezes; full 5-season
-    verdict after backfill completes.)
+- **VERDICT so far: REFUTED-dormant** — across 117 PIT days (2021-11→2022-02)
+  `freeze_prob` maxes at 0.131 (< 0.6 entry), so FreezeSignal fires **0 LONGs**;
+  all large OJ moves had zero freeze forecast. The "15–40% OJ spike within 48h
+  of freeze" docstring claim is **not** a tradable rule on this real PIT data.
+  (Caveat: bbox [-84,25,-80,30] may miss north-FL hard freezes; full 5-season
+  verdict after backfill completes.)
 - Raw OJ=F re-pulled from 2015 (was 2022-12) → continuous + PIT now cover the
   2021-22 season. Suite: **1480 passed / 5 skipped**.
+
+### 2026-08-11 — FULL DATASET COMPLETE + T5/T6 DONE
+- **Wide-bbox correction:** narrow bbox [-84,25,-80,30] **missed the Jan-2022
+  hard freeze entirely** (coldest +0.7°C). Wide bbox [-85,24,-80,31] detects it
+  (min −2.2…−2.8°C, 70–99 freeze cells on Jan 29–30). All backfill rerun with the
+  wide bbox; filenames now bbox-tagged (deterministic rebuild).
+- **Backfill complete: 6448/6448 parquets, 0 MISS** (2021-11-01→2026-03-31, 12Z,
+  f000/f012/f024/f048, 0p50, wide FL bbox). DNS flakiness caused a 4864-MISS first
+  run → fixed with whole-job retry+backoff and per-worker long-lived connectors
+  (reuses connections/DNS). Rerun: 4864 OK, 0 MISS in 127.6 min.
+- **T5 DONE:** `scripts/rebuild_dataset.py` — deterministic rebuild (backfill →
+  continuous → PIT) + DQ gates. All 4 gates pass on full data (completeness 6448
+  units, schema/range on every parquet, staleness, PIT plausibility). Manifest
+  with per-step rc + sha256 hashes: `data/ws0/manifest.json`.
+- **T6 DONE:** `docs/WS0_G0_REPORT.md` — **verdict: REFUTED.** Full 5-season
+  evidence:
+  - FreezeSignal fires **0/1612** LONGs; max freeze_prob 18.0% << 0.6 threshold.
+  - Forward OJ return by bucket: no-freeze +0.08%, trace −0.22%, low −1.27% →
+    relationship is **negative**; Spearman −0.040 (p=0.106).
+  - Jan-2022 hard freeze (detected in wide bbox): OJ **fell** 8.6% that week.
+  - Jul-2025 +12.9%/+11.6% and Apr-2025 +43.6% rallies: freeze_prob 0 (+22…24°C,
+    +10…14°C). Biggest moves are NOT freeze-driven.
+  - Recommendation: do not cite the 15–40% claim without qualification; redefine
+    feature/thresholds if the freeze thesis is pursued.
 
 ## Status board
 

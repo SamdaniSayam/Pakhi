@@ -39,13 +39,11 @@ def _bbox_tag(bbox: list[float]) -> str:
     return f"W{bbox[1]:g}S{bbox[0]:g}E{bbox[3]:g}N{bbox[2]:g}".replace(".", "_")
 
 
-def _work(args: tuple) -> dict | None:
-    date_str, cycle_str, lead, bbox, resolution, variables, out = args
-    tag = _bbox_tag(bbox)
-    parquet = Path(out) / f"gfs_{date_str}_{cycle_str}z_f{lead:03d}_{tag}.parquet"
-    if parquet.exists() and parquet.stat().st_size > 0:
-        return None
-    conn = GFSConnector(
+_worker_conn = None
+
+
+def _new_conn(bbox, resolution, variables) -> GFSConnector:
+    return GFSConnector(
         variables=variables,
         bbox=bbox,
         resolution=resolution,
@@ -53,32 +51,56 @@ def _work(args: tuple) -> dict | None:
         max_retries=3,
         retry_delay=2.0,
     )
+
+
+def _worker_init(bbox, resolution, variables):
+    """Per-worker state: one long-lived connector (reuses connections / DNS)."""
+    global _worker_conn
+    _worker_conn = _new_conn(bbox, resolution, variables)
+
+
+def _work(args: tuple) -> dict | None:
+    global _worker_conn
+    date_str, cycle_str, lead, bbox, resolution, variables, out, retries = args
+    tag = _bbox_tag(bbox)
+    parquet = Path(out) / f"gfs_{date_str}_{cycle_str}z_f{lead:03d}_{tag}.parquet"
+    if parquet.exists() and parquet.stat().st_size > 0:
+        return None
     t0 = time.time()
-    try:
-        ds = conn._fetch_archive_cycle(date_str, cycle_str, lead)
-        ds = conn._subset_bbox(ds)
-        df = ds.to_dataframe().reset_index()
-        df["date"] = date_str
-        df["cycle"] = cycle_str
-        df["lead"] = lead
-        df.to_parquet(parquet)
-        return {
-            "date": date_str,
-            "cycle": cycle_str,
-            "lead": lead,
-            "file": parquet.name,
-            "source": "aws",
-            "vars": ",".join(sorted(ds.data_vars)),
-            "grid_lat": ds.sizes.get("latitude", 0),
-            "grid_lon": ds.sizes.get("longitude", 0),
-            "nbytes": parquet.stat().st_size,
-            "fetch_s": round(time.time() - t0, 1),
-        }
-    except Exception as exc:
-        logger.warning("MISS %s %sZ f%03d — %s", date_str, cycle_str, lead, exc)
-        return {"date": date_str, "cycle": cycle_str, "lead": lead, "file": "", "source": "MISS", "nbytes": 0}
-    finally:
-        conn.close()
+    for attempt in range(1, retries + 1):
+        conn = _worker_conn
+        try:
+            ds = conn._fetch_archive_cycle(date_str, cycle_str, lead)
+            ds = conn._subset_bbox(ds)
+            df = ds.to_dataframe().reset_index()
+            df["date"] = date_str
+            df["cycle"] = cycle_str
+            df["lead"] = lead
+            df.to_parquet(parquet)
+            return {
+                "date": date_str,
+                "cycle": cycle_str,
+                "lead": lead,
+                "file": parquet.name,
+                "source": "aws",
+                "vars": ",".join(sorted(ds.data_vars)),
+                "grid_lat": ds.sizes.get("latitude", 0),
+                "grid_lon": ds.sizes.get("longitude", 0),
+                "nbytes": parquet.stat().st_size,
+                "fetch_s": round(time.time() - t0, 1),
+            }
+        except Exception as exc:
+            try:
+                conn.close()
+            finally:
+                _worker_conn = _new_conn(bbox, resolution, variables)
+            if attempt < retries:
+                backoff = min(5.0 * 2 ** (attempt - 1), 60.0)
+                time.sleep(backoff)
+            else:
+                logger.warning("MISS %s %sZ f%03d — %s", date_str, cycle_str, lead, exc)
+                return {"date": date_str, "cycle": cycle_str, "lead": lead, "file": "", "source": "MISS", "nbytes": 0}
+    return None  # pragma: no cover
 
 
 def main() -> None:
@@ -92,6 +114,7 @@ def main() -> None:
     parser.add_argument("--out", default="data/gfs", help="Output directory")
     parser.add_argument("--inventory", default="data/gfs/cycle_inventory.csv", help="Inventory CSV")
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--retries", type=int, default=6, help="Whole-job retry attempts w/ backoff")
     args = parser.parse_args()
 
     cycles = [c.strip().zfill(2) for c in args.cycles.split(",") if c.strip()]
@@ -102,7 +125,7 @@ def main() -> None:
     inventory_path = Path(args.inventory)
 
     dates = pd.date_range(args.start, args.end, freq="D")
-    jobs = [(d.strftime("%Y%m%d"), c, lead, bbox, args.resolution, WS0_VARIABLES, str(out))
+    jobs = [(d.strftime("%Y%m%d"), c, lead, bbox, args.resolution, WS0_VARIABLES, str(out), args.retries)
             for d in dates for c in cycles for lead in leads]
     existing = {f.name for f in out.glob("gfs_*.parquet")}
     jobs = [
@@ -120,7 +143,7 @@ def main() -> None:
 
     rows = []
     t_start = time.time()
-    with Pool(args.workers) as pool:
+    with Pool(args.workers, initializer=_worker_init, initargs=(bbox, args.resolution, WS0_VARIABLES)) as pool:
         for i, row in enumerate(pool.imap_unordered(_work, jobs), 1):
             if row is not None:
                 rows.append(row)

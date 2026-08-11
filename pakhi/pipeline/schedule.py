@@ -169,7 +169,9 @@ class RefreshScheduler:
                     logger.exception("Refresh callback failed for job %s", jid)
                 with self._lock:
                     if jid in self._jobs:
-                        self._jobs[jid]["next_run"] = datetime.now(timezone.utc) + timedelta(hours=hrs)
+                        self._jobs[jid]["next_run"] = datetime.now(timezone.utc) + timedelta(
+                            hours=hrs
+                        )
 
             t = threading.Thread(target=_run_job, name=f"RefreshJob-{job_id}", daemon=True)
             t.start()

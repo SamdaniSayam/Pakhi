@@ -243,6 +243,7 @@ class PaperTrader:
             pnl = (trade.entry_price - exit_price) * trade.quantity
 
         from datetime import timezone
+
         trade.exit_price = exit_price
         trade.exit_time = timestamp if timestamp is not None else datetime.now(timezone.utc)
         trade.pnl = pnl

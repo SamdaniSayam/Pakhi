@@ -15,7 +15,6 @@ try:
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
 except ImportError:
     raise ImportError(

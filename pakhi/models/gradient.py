@@ -66,7 +66,9 @@ def _compute_feature_importance_summary(
         except ValueError:
             # String feature names — return dict directly
             total = sum(scores.values()) or 1.0
-            return {k: v / total for k, v in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
+            return {
+                k: v / total for k, v in sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            }
     else:
         return {}
 

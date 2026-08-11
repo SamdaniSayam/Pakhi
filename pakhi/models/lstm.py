@@ -298,7 +298,10 @@ class LSTMForecaster(BaseModel):
         except RuntimeError as e:
             if "cuDNN" in str(e) or "CUDA" in str(e):
                 import logging
-                logging.getLogger(__name__).warning(f"CUDA initialization failed ({e}), falling back to CPU.")
+
+                logging.getLogger(__name__).warning(
+                    f"CUDA initialization failed ({e}), falling back to CPU."
+                )
                 self._device_request = "cpu"
                 self._net = self._net.to("cpu")
             else:

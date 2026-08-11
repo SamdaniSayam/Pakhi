@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from pakhi.ws0.features import freeze_features
@@ -42,15 +41,15 @@ def main() -> None:
         leads = sorted(GFS.glob(prefix + "f*.parquet"))
         frame = pd.concat([pd.read_parquet(p) for p in leads], ignore_index=True)
         feats = freeze_features(frame)
-        
+
         # Get next available trading close
         nxt = ojd.index[ojd.index > cycle_date]
         # Get last available trading close (current or previous day)
         prev = ojd.index[ojd.index <= cycle_date]
-        
+
         if nxt.empty or prev.empty:
             continue
-            
+
         next_close = float(ojd.loc[nxt[0]])
         cur = float(ojd.loc[prev[-1]])
         rows.append(

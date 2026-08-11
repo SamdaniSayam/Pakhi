@@ -261,15 +261,15 @@ class TemporalFeatures:
         for w in self._windows_for(len(series)):
             x = np.arange(w, dtype=np.float64)
             sum_x = x.sum()
-            sum_x2 = (x ** 2).sum()
+            sum_x2 = (x**2).sum()
             n = float(w)
-            denom = n * sum_x2 - sum_x ** 2
+            denom = n * sum_x2 - sum_x**2
 
             if abs(denom) < 1e-15:
                 cols[f"{name}_trend_{w}"] = pd.Series(np.nan, index=series.index)
             else:
                 sum_xy = series.rolling(w, min_periods=3).apply(
-                    lambda y: np.dot(x[:len(y)], y), raw=True
+                    lambda y, x=x: np.dot(x[: len(y)], y), raw=True
                 )
                 sum_y = series.rolling(w, min_periods=3).sum()
                 cols[f"{name}_trend_{w}"] = (n * sum_xy - sum_x * sum_y) / denom

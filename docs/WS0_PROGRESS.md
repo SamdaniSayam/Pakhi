@@ -131,18 +131,39 @@ and the user is shown the running terminal live.
   - Recommendation: do not cite the 15–40% claim without qualification; redefine
     feature/thresholds if the freeze thesis is pursued.
 
+### 2026-08-11 — PIT audit corrections + G0 report restated (commit `531485e`)
+- **PIT outcome alignment fixed (`scripts/build_pit.py`):** the old builder
+  resampled prices to calendar days with `.ffill()`, fabricating 529/1612 (33%)
+  zero forward returns (weekend "prices" = Friday's close → 0.0 %). Now the
+  outcome is the **next actual trading-day close** over the last close on-or-before
+  the cycle date, read directly from the OJ index — no forward-filling. Rebuilt
+  PIT: 1612 rows, **54/1612 (3.3 %)** flat returns, each verified as genuine
+  consecutive-equal closes at holidays/month/year boundaries.
+- **Point-in-time feature fix (`pakhi/ws0/features.py`):** freeze features now
+  exclude forecast-valid times *before* the publish cutoff (`valid >= current_time`);
+  f000 analysis cells (valid 12Z, pre-publish) are no longer usable. Max
+  `freeze_prob` rises 18.0 % → **21.8 %** (2025/26); 74 PIT rows change.
+- **G0 report restated (`docs/WS0_G0_REPORT.md`)** on the corrected frame.
+  Verdict unchanged and **strengthened**: signal still fires **0/1612** LONGs;
+  Spearman(`freeze_prob`, `fwd_return`) is now **−0.062 (p=0.013)** — significant
+  and negative. Buckets: no-freeze +0.11 % (n=1557), trace −0.44 % (n=39), low
+  −2.40 % (n=15), mid −10.8 % (n=1). All top forward moves (+9.5 %…+12.9 %) carry
+  freeze_prob 0.
+- **Dataset regenerated end-to-end** via `scripts/rebuild_dataset.py`: 6448/6448
+  GFS units, all 4 DQ gates pass, manifest hashes refreshed
+  (`freeze_pit` → `73d72260…`). **1480 passed / 5 skipped; ruff clean.**
+
 ## Status board
 
 | Task | Status | Notes |
 |---|---|---|
 | T0 Wedge decision | **DONE** | OJ primary / ERCOT backup |
-| T1 Weather layer | **running** | full backfill in background (~11h); byte-range proven |
+| T1 Weather layer | **DONE** | 6448/6448 parquets, 0 MISS (as-published AWS archive, byte-range) |
 | T2 Market layer | **DONE** | Yahoo parquets + ICE-verified roll calendar |
-| T3 Continuous contracts | **DONE** | roll.py + provenance; 22 rolls back-adjusted, 1 real event flagged |
-| T4 PIT dataset | **building** | features.py + PIT builder + eval script live; pre-check: signal REFUTED-dormant so far |
-| T4 PIT dataset | pending | |
-| T5 Reproducibility + DQ | pending | |
-| T6 G0 handoff | pending | |
+| T3 Continuous contracts | **DONE** | roll.py + provenance; 34 rolls back-adjusted 2021→2026, 1 real event flagged |
+| T4 PIT dataset | **DONE** | 1612-row PIT, next actual trading-session outcomes; signal never fires |
+| T5 Reproducibility + DQ | **DONE** | rebuild_dataset.py; 4 DQ gates pass; manifest with sha256 hashes |
+| T6 G0 handoff | **DONE** | G0 report: REFUTED (Spearman −0.062, p=0.013) |
 
 ## Open items / risks
 

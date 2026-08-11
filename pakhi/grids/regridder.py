@@ -309,14 +309,16 @@ def _regrid_conservative(
 
     cos_lat_src = np.cos(np.radians(slat))
 
-    lat_overlap = np.maximum(0,
+    lat_overlap = np.maximum(
+        0,
         np.minimum(src_lat_edges_hi[:, None], tgt_lat_edges_hi[None, :])
-        - np.maximum(src_lat_edges_lo[:, None], tgt_lat_edges_lo[None, :])
+        - np.maximum(src_lat_edges_lo[:, None], tgt_lat_edges_lo[None, :]),
     )
 
-    lon_overlap = np.maximum(0,
+    lon_overlap = np.maximum(
+        0,
         np.minimum(src_lon_edges_hi[:, None], tgt_lon_edges_hi[None, :])
-        - np.maximum(src_lon_edges_lo[:, None], tgt_lon_edges_lo[None, :])
+        - np.maximum(src_lon_edges_lo[:, None], tgt_lon_edges_lo[None, :]),
     )
 
     for ti in range(n_tgt_lat):

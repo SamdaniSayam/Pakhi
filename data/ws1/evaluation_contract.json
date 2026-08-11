@@ -1,0 +1,105 @@
+{
+  "version": "1.0",
+  "status": "LOCKED",
+  "locked_utc": "2026-08-11T00:00:00+00:00",
+  "gate": "G1",
+  "instrument": "OJ=F",
+  "source_doc": "docs/WS1_EVALUATION_CONTRACT.md",
+  "pit": {
+    "path": "data/ws0/freeze_pit.parquet",
+    "rows": 1612,
+    "start": "2021-11-01",
+    "end": "2026-03-31",
+    "two_session_outcomes_available": 1612
+  },
+  "folds": {
+    "type": "season-block expanding-window walk-forward",
+    "embargo_sessions": 5,
+    "folds": [
+      {
+        "test": "2022-11-01..2023-10-31",
+        "rows": 365
+      },
+      {
+        "test": "2023-11-01..2024-10-31",
+        "rows": 366
+      },
+      {
+        "test": "2024-11-01..2025-10-31",
+        "rows": 365
+      },
+      {
+        "test": "2025-11-01..2026-03-31",
+        "rows": 151
+      }
+    ],
+    "oos_rows": 1247,
+    "oos_span_years": 3.4114
+  },
+  "events": {
+    "definition": "run of consecutive PIT rows with freeze_prob>0; gap>2 calendar days starts a new episode",
+    "total_episodes": 16,
+    "oos_episodes": 13,
+    "trades_per_episode_max": 1
+  },
+  "sample_size": {
+    "rule": "shrunk edge claim per blueprint T5; N>=30 structurally unreachable (ceiling 13)",
+    "n_min": 8,
+    "n_min_capture_rate": 0.62
+  },
+  "signal": {
+    "baseline": "FreezeSignal entry 0.6 (expected 0 trades)",
+    "candidate": "redefined freeze/cold-event signal, registered in writing before OOS scoring",
+    "max_free_parameters": 3,
+    "train_only": true,
+    "one_shot": true
+  },
+  "trade": {
+    "entry": "fill at base session close (ojd_close) on first firing row of episode",
+    "hold_sessions": 2,
+    "gross_return": "close[D+2]/close[D]-1",
+    "costs_bps_round_trip": 30,
+    "costs_breakdown": "5 bps commission + 10 bps slippage per position change x2",
+    "fill_timing": "signal at day i -> fill at close of day i"
+  },
+  "metric": {
+    "type": "event-based trade-level net-of-benchmark Sharpe, pooled across folds",
+    "annualization": "mean/std * sqrt(N / span_years)",
+    "bootstrap": {
+      "resamples": 10000,
+      "method": "percentile",
+      "seed": 42
+    },
+    "context_only": [
+      "gross_event_sharpe",
+      "net_event_sharpe",
+      "daily_equity_sharpe",
+      "t_stat",
+      "bootstrap_ci"
+    ]
+  },
+  "benchmark": {
+    "definition": "always-long OJ over matched 2-session window",
+    "rbar_2sess_oos": 0.001722,
+    "net_of_benchmark_return": "gross - 0.0030 - rbar"
+  },
+  "decision_rules": {
+    "PASS": "N>=8 and net-of-benchmark event Sharpe>1.0 and bootstrap CI lower bound>0",
+    "FAIL_PIVOT": "N>=8 and (CI includes 0 or mean net<=0)",
+    "UNDER_POWERED": "N<8 OOS event-trades",
+    "ZERO_TRADES": "architecture success -> documented pivot"
+  },
+  "hard_gates": {
+    "timestamp_armor": "fail if feature references data published after decision cutoff",
+    "vintage_armor": "fail if feature not from noaa-gfs-bdp-pds or vintage predates own timestamp",
+    "roll_jump_armor": "halt if roll-date move >5x daily sigma without modeled weather event"
+  },
+  "anti_gaming": [
+    "one-shot evaluation",
+    "no OOS feedback into tuning",
+    "no full-window parameter search",
+    "pre-registration committed to git"
+  ],
+  "change_control": "any amendment requires new version + re-lock; prior results void",
+  "payload_sha256": "204ccf5cc46ab5c4cde43ee6d14f93e12feb4dc89f26d0d0f921c2e0d47d697f"
+}

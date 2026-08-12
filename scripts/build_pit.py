@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
-"""WS-0 T4: build the point-in-time freeze frame (features | outcome).
+"""WS-0 T4 / WS-1 T1: build the point-in-time freeze frame (features | outcome).
 
 For every trading day with an as-published 12Z GFS cycle in data/gfs/:
 
   decision cutoff : GFS publish time (~15:35 UTC of date D)
   features        : freeze features from the D 12Z cycle (0-48h horizon)
-  outcome         : OJ front-month return close[D+1]/close[D] - 1
+  outcome         : OJ front-month returns over the executable fill base
+
+**Fill-timing (v1.1, no lookahead):** the fill session is the **first trading
+session on/after** the cycle date — the same-day close for trading-day cycles
+(GFS publish 15:35Z precedes the OJ close) and the **next** trading-day close
+(Monday) for weekend/holiday cycles.  A Saturday cycle is never filled at the
+prior Friday close (that would trade on information not yet published).
+
+Outcomes: fwd_return = close[base+1]/close[base] - 1 and
+          fwd2_return = close[base+2]/close[base] - 1 (WS-1 T1: 2-session hold)
 
 Outputs data/ws0/freeze_pit.parquet with columns:
   date, cycle, publish_time, temperature_min, freeze_prob, grid_cells,
-  horizon_cells, ojd_close, ojd_next_close, fwd_return
+  horizon_cells, ojd_close, ojd_next_close, fwd_return, ojd_next2_close,
+  fwd2_return, source
+
+``source`` = the as-published GFS archive bucket (``noaa-gfs-bdp-pds``),
+traced per row for the T3 vintage armor.
 """
 
 from __future__ import annotations
@@ -19,6 +32,7 @@ from pathlib import Path
 import pandas as pd
 
 from pakhi.ws0.features import freeze_features
+from pakhi.ws1.provenance import ARCHIVE
 
 HERE = Path(__file__).resolve().parent.parent
 GFS = HERE / "data" / "gfs"
@@ -42,16 +56,23 @@ def main() -> None:
         frame = pd.concat([pd.read_parquet(p) for p in leads], ignore_index=True)
         feats = freeze_features(frame)
 
-        # Get next available trading close
-        nxt = ojd.index[ojd.index > cycle_date]
-        # Get last available trading close (current or previous day)
-        prev = ojd.index[ojd.index <= cycle_date]
+        # Fill base (v1.1): first trading session ON/AFTER the cycle date.
+        # Same-day close for trading-day cycles; the NEXT trading close for
+        # weekend/holiday cycles.  Never the prior Friday close.
+        base = ojd.index[ojd.index >= cycle_date]
 
-        if nxt.empty or prev.empty:
+        if base.empty:
             continue
 
-        next_close = float(ojd.loc[nxt[0]])
-        cur = float(ojd.loc[prev[-1]])
+        base_date = base[0]
+        after = ojd.index[ojd.index > base_date]
+
+        if after.empty:
+            continue
+
+        cur = float(ojd.loc[base_date])
+        next_close = float(ojd.loc[after[0]])
+        next2_close = float(ojd.loc[after[1]]) if len(after) >= 2 else float("nan")
         rows.append(
             {
                 "date": cycle_date.date(),
@@ -66,6 +87,9 @@ def main() -> None:
                 "ojd_close": cur,
                 "ojd_next_close": next_close,
                 "fwd_return": next_close / cur - 1.0,
+                "ojd_next2_close": next2_close,
+                "fwd2_return": next2_close / cur - 1.0,
+                "source": ARCHIVE,
             }
         )
 
@@ -76,6 +100,8 @@ def main() -> None:
         if len(pit)
         else "PIT rows: 0"
     )
+    missing2 = int(pit["fwd2_return"].isna().sum()) if len(pit) else 0
+    print(f"2-session outcomes missing: {missing2}/{len(pit)}")
     if len(pit) >= 2:
         cold = pit[pit["freeze_prob"] > 0.2]
         hot = pit[pit["freeze_prob"] == 0]

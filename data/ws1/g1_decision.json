@@ -1,0 +1,39 @@
+{
+  "gate": "G1",
+  "instrument": "ColdGrip",
+  "decision_utc": "2026-08-12T08:29:56.344753+00:00",
+  "outcome": "UNDER_POWERED",
+  "outcome_statement": "no conclusion; defers to Phase 2 live paper-trading to accumulate events",
+  "decision_reason": "N=7 < N_min=8: no conclusion; G1 recorded UNDER-POWERED, freeze thesis defers to Phase 2 live paper-trading to accumulate events",
+  "headline_metric": {
+    "net_of_benchmark_event_sharpe": -0.19269757878595625,
+    "ci_95_lower": -1.019174071191004,
+    "ci_95_upper": 2.1104863136704397,
+    "bootstrap_pvalue_edge_gt_zero": 0.6302369763023697,
+    "n_events": 7,
+    "power_class": "under-powered (N < N_min)",
+    "mean_net_of_benchmark": -0.012372122008884398,
+    "classic_t": -0.3559099804665614,
+    "newey_west_t": -0.5896100499609181,
+    "newey_west_lag": 2
+  },
+  "metrics_crosscheck": {
+    "n_events": 7,
+    "net_of_benchmark_sharpe": -0.19269757878595625
+  },
+  "evidence_chain": {
+    "evaluation_contract": "docs/WS1_EVALUATION_CONTRACT.md",
+    "contract_json": "data/ws1/evaluation_contract.json",
+    "candidate_registration": "docs/T4_CANDIDATE_REGISTRATION.md",
+    "candidate_json": "data/ws1/t4_candidate.json",
+    "harness_report": "data/ws1/t4_candidate_report.json",
+    "decision_report": "docs/WS1_G1_REPORT.md"
+  },
+  "phase_2": {
+    "scope": "60-day live paper-trading harness to accumulate OOS event-trades",
+    "entry_criterion": "grow N >= N_min (8) so G1 can reach a statistical verdict",
+    "re_evaluation": "G1 re-run on the paper-trading event ledger; verdict updates on data"
+  },
+  "note": "Strictly OJ (NG, CME HDD/CDD, ensemble disagreement index deferred per Execution Blueprint \u00a74 T6). One-shot: the pre-registered ColdGrip candidate is scored exactly once against the locked contract; no re-tuning after any fold is scored.",
+  "payload_sha256": "1c2b09d52b10c8968832d3a7497b17f28e05c41d3797b27e3dedf8f46820460e"
+}

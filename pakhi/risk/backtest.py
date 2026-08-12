@@ -93,6 +93,7 @@ class BacktestEngine:
         commission_bps: float = 5.0,
         slippage_bps: float = 2.0,
         instrument: str = "UNKNOWN",
+        lookahead_armor: bool = False,
     ) -> BacktestResult:
         """Run a single backtest.
 
@@ -113,6 +114,11 @@ class BacktestEngine:
             Slippage in basis points per trade. Default 2.
         instrument : str
             Instrument label for logging.
+        lookahead_armor : bool
+            T3 guard: fail immediately (``LookaheadError``) if a signal's
+            attached provenance references a future cycle, a publication after
+            the current session's decision cutoff, or a signal timestamp in
+            the future.  Default ``False`` (generic engine behaviour).
 
         Returns
         -------
@@ -142,6 +148,9 @@ class BacktestEngine:
         entry_price = 0.0
         entry_idx = 0
         entry_equity = 0.0
+        entry_provenance: dict = {}
+        cum_cost_frac = 0.0  # cumulative cost paid (fraction of equity at each charge)
+        entry_cum_cost_frac = 0.0  # ``cum_cost_frac`` just before this trade's entry cost
 
         commission_rate = commission_bps / 10_000
         slippage_rate = slippage_bps / 10_000
@@ -156,44 +165,63 @@ class BacktestEngine:
 
             signal = signal_generator(data.iloc[: i + 1], i)
 
+            if lookahead_armor:
+                self._assert_no_lookahead(signal, data.index[i])
+
             new_position = self._signal_to_position(signal)
             if new_position != position:
+                trade_cost = (
+                    abs(new_position - position) * equity[i] * (commission_rate + slippage_rate)
+                )
+                cost_frac = trade_cost / equity[i] if equity[i] != 0 else 0.0
                 if position != 0:
                     pnl = equity[i] - entry_equity
+                    costs_incurred = cum_cost_frac + cost_frac - entry_cum_cost_frac
                     trades.append(
                         {
                             "entry_idx": entry_idx,
                             "exit_idx": i,
+                            "entry_time": prices.index[entry_idx],
+                            "exit_time": prices.index[i],
                             "entry_price": entry_price,
                             "exit_price": price_now,
                             "pnl": float(pnl),
                             "return": float(pnl / entry_equity) if entry_equity != 0 else 0.0,
+                            "costs_incurred": float(costs_incurred),
+                            "costs_bps": float(costs_incurred * 10_000),
+                            "provenance": dict(entry_provenance),
                         }
                     )
 
-                trade_cost = (
-                    abs(new_position - position) * equity[i] * (commission_rate + slippage_rate)
-                )
                 equity[i] -= trade_cost
+                cum_cost_frac += cost_frac
 
                 if new_position != 0:
                     entry_price = price_now
                     entry_idx = i
                     entry_equity = equity[i]
+                    entry_provenance = dict(signal.provenance or {})
+                    entry_cum_cost_frac = cum_cost_frac - cost_frac
 
                 position = new_position
 
         if position != 0:
             price_last = float(prices.iloc[-1])
             pnl = equity[-1] - entry_equity
+            costs_incurred = cum_cost_frac - entry_cum_cost_frac
             trades.append(
                 {
                     "entry_idx": entry_idx,
                     "exit_idx": len(prices) - 1,
+                    "entry_time": prices.index[entry_idx],
+                    "exit_time": prices.index[-1],
                     "entry_price": entry_price,
                     "exit_price": price_last,
                     "pnl": float(pnl),
                     "return": float(pnl / entry_equity) if entry_equity != 0 else 0.0,
+                    "costs_incurred": float(costs_incurred),
+                    "costs_bps": float(costs_incurred * 10_000),
+                    "provenance": dict(entry_provenance),
                 }
             )
 
@@ -236,6 +264,7 @@ class BacktestEngine:
         slippage_bps: float = 2.0,
         instrument: str = "UNKNOWN",
         retrain_fn: Callable[[pd.DataFrame], Callable[[pd.DataFrame, int], Signal]] | None = None,
+        lookahead_armor: bool = False,
     ) -> list[BacktestResult]:
         """Rolling window walk-forward backtest.
 
@@ -284,6 +313,7 @@ class BacktestEngine:
                     commission_bps=commission_bps,
                     slippage_bps=slippage_bps,
                     instrument=instrument,
+                    lookahead_armor=lookahead_armor,
                 )
             ]
 
@@ -311,6 +341,7 @@ class BacktestEngine:
                 commission_bps=commission_bps,
                 slippage_bps=slippage_bps,
                 instrument=instrument,
+                lookahead_armor=lookahead_armor,
             )
             results.append(result)
             logger.info(
@@ -323,6 +354,39 @@ class BacktestEngine:
             start += test_window
 
         return results
+
+    @staticmethod
+    def _assert_no_lookahead(signal: Signal, current: pd.Timestamp) -> None:
+        """T3 engine armor: fail on any provenance that leaks future data.
+
+        Raises ``pakhi.ws1.armor.LookaheadError`` when the signal's attached
+        provenance references a forecast cycle strictly after ``current``, or a
+        publication timestamp after the current session's decision cutoff
+        (ICE OJ 14:00 America/New_York close), or a signal timestamp in the
+        future.  The import is deferred so the generic engine stays decoupled.
+        """
+        from pakhi.ws1.armor import LookaheadError, decision_cutoff
+
+        if signal.timestamp is not None and pd.notna(signal.timestamp) and pd.Timestamp(signal.timestamp) > pd.Timestamp(current):
+            raise LookaheadError(
+                f"signal timestamp {signal.timestamp} > current session {current}"
+            )
+
+        prov = signal.provenance or {}
+        cycle_id = prov.get("forecast_cycle_id")
+        if cycle_id:
+            cycle_date = pd.to_datetime(cycle_id.split("_")[0], format="%Y%m%d")
+            if cycle_date.date() > pd.Timestamp(current).date():
+                raise LookaheadError(
+                    f"signal references future cycle {cycle_id} at session {current.date()}"
+                )
+        pub = prov.get("publication_ts")
+        if pub:
+            cutoff = decision_cutoff(current)
+            if pd.Timestamp(pub) > cutoff:
+                raise LookaheadError(
+                    f"publication {pub} after decision cutoff {cutoff} at session {current.date()}"
+                )
 
     @staticmethod
     def _signal_to_position(signal: Signal) -> float:

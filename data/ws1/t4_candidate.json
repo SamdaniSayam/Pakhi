@@ -1,0 +1,43 @@
+{
+  "candidate": "ColdGrip",
+  "status": "REGISTERED",
+  "registered_utc": "2026-08-11T18:04:01.643879+00:00",
+  "source_doc": "docs/T4_CANDIDATE_REGISTRATION.md",
+  "evaluation_contract": "data/ws1/evaluation_contract.json",
+  "rule_family": {
+    "fire": "freeze_prob >= theta_p AND temperature_min <= theta_t",
+    "theta_t_c": 0.0,
+    "theta_t_origin": "fixed physical freeze definition, not estimated",
+    "theta_p_estimator": "median(freeze_prob) over fold train-window freeze rows (freeze_prob > 0, date <= fold_train_end)",
+    "free_parameters": 1,
+    "free_parameters_max": 3,
+    "trades_per_episode_max": 1,
+    "entry": "first firing row of each episode",
+    "hold_sessions": 2,
+    "hold_origin": "locked by evaluation contract section 5"
+  },
+  "fold_estimation": {
+    "type": "season-block expanding-window walk-forward",
+    "train_for_fold_k": "all PIT rows with date <= previous fold train end (seed window for fold 1)",
+    "leakage_guard": "thresholds estimated from train rows only; gates applied to fold test rows only",
+    "no_train_freeze_rows": "fold fires nothing (no evidence), never a fabricated threshold"
+  },
+  "no_outcome_columns": true,
+  "anti_gaming": [
+    "no parameter search over the full window",
+    "no metric feedback into tuning",
+    "rule family and theta_p estimator fixed before scoring"
+  ],
+  "roll_jump": {
+    "x_sigma": 5.0,
+    "machinery": "pakhi.ws0.roll.back_adjust (roll-date gap) + roll_jump_assertion (3-day near-roll net)",
+    "near_sessions": 3,
+    "halt": "flagged roll-date gap >= 1+5*sigma not co-located with a modeled freeze episode -> RollJumpError (INVALID run)",
+    "real_archive": {
+      "n_rolls": 34,
+      "flagged_roll_gaps": 0,
+      "near_roll_extreme_moves": 1
+    }
+  },
+  "exit_criterion": "capable of firing trades under OOS constraints without exploiting roll gaps"
+}

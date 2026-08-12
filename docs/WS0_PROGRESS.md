@@ -153,6 +153,36 @@ and the user is shown the running terminal live.
   GFS units, all 4 DQ gates pass, manifest hashes refreshed
   (`freeze_pit` → `73d72260…`). **1480 passed / 5 skipped; ruff clean.**
 
+### 2026-08-11 — PIT rebuilt with 2-session outcomes (WS-1 T1 dependency)
+- `scripts/build_pit.py` extended: every PIT row now carries `ojd_next2_close`
+  and `fwd2_return` (close[D+2]/close[D] − 1) in addition to the 1-session
+  outcome. **0/1612 rows missing** a 2-session outcome.
+- Rebuilt PIT sha256 → `95eabae0…` (data/ws0/manifest.json refreshed; the
+  historical `73d72260…` hash above describes the pre-extension frame).
+- `scripts/rebuild_dataset.py::gate_pit` delegates to the shared WS-1 validator
+  (`pakhi/ws1/pit.py`) so the DQ gate and the harness can never disagree.
+
+### 2026-08-11 — PIT rebuilt with v1.1 next-close fills (WS-1 contract amendment)
+- **Fill-timing fix:** `scripts/build_pit.py` now sets the fill base to the
+  **first trading session on/after** the cycle date (same-day close for trading
+  days; the **next** trading close for weekend/holiday cycles). The old rule
+  filled Saturday 15:35Z cycles at the prior Friday close — lookahead. Outcomes
+  (`fwd_return`, `fwd2_return`) are measured from the executable fill session.
+- Rows unchanged (1612, 0 missing 2-session outcomes); weekend rows now carry
+  the Monday close as `ojd_close`. PIT sha256 → `bc6abdb3fda3…`
+  (data/ws0/manifest.json refreshed).
+
+### 2026-08-11 — PIT `source` column + vintage manifest + armor gate (WS-1 T3)
+- **`scripts/build_pit.py`** now records `source = noaa-gfs-bdp-pds` per row
+  (traces every feature to the as-published archive for the WS-1 T3 vintage
+  armor).
+- **`scripts/rebuild_dataset.py`**: `cycle_inventory.csv` now records the
+  explicit bucket (`noaa-gfs-bdp-pds`) instead of generic `aws`; a per-cycle
+  **vintage manifest** (`data/ws0/gfs_vintage_manifest.json`, sha256 per cycle
+  over its raw archive parquets) is written; a new **`armor` DQ gate** runs the
+  WS-1 T3 timestamp + vintage layers (incl. full disk-hash drift scan) on every
+  rebuild. All 5 gates pass; manifest refreshed.
+
 ## Status board
 
 | Task | Status | Notes |
@@ -162,7 +192,7 @@ and the user is shown the running terminal live.
 | T2 Market layer | **DONE** | Yahoo parquets + ICE-verified roll calendar |
 | T3 Continuous contracts | **DONE** | roll.py + provenance; 34 rolls back-adjusted 2021→2026, 1 real event flagged |
 | T4 PIT dataset | **DONE** | 1612-row PIT, next actual trading-session outcomes; signal never fires |
-| T5 Reproducibility + DQ | **DONE** | rebuild_dataset.py; 4 DQ gates pass; manifest with sha256 hashes |
+| T5 Reproducibility + DQ | **DONE** | rebuild_dataset.py; 5 DQ gates pass (completeness, schema, staleness, pit, armor); manifest with sha256 hashes + per-cycle vintage manifest |
 | T6 G0 handoff | **DONE** | G0 report: REFUTED (Spearman −0.062, p=0.013) |
 
 ## Open items / risks

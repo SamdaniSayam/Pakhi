@@ -1,0 +1,222 @@
+{
+  "valid": true,
+  "validation": "PIT 1612 rows, fwd_return range [-0.12, 0.13], fwd2 range [-0.20, 0.23]",
+  "armor": {
+    "pass": true,
+    "timestamp": {
+      "n_rows": 1612,
+      "publish_after_cutoff": 0,
+      "min_publish_margin_hours": 2.5,
+      "event_peak_outside_horizon": 0,
+      "feature_horizon_hours": 48,
+      "feature_outcome_separation": true
+    },
+    "vintage": {
+      "archive": "noaa-gfs-bdp-pds",
+      "n_pit_cycles": 1612,
+      "n_cycles_in_manifest": 1612,
+      "source_match": true,
+      "n_hash_drift": 0,
+      "recorded_utc": "2026-08-11T17:54:37.015808+00:00"
+    },
+    "roll_jump": {
+      "n_rolls": 34,
+      "n_flagged_rolls": 0,
+      "flagged_rolls": [],
+      "unmodeled_roll_gaps": [],
+      "n_near_roll_extreme_moves": 1,
+      "near_roll_extreme_moves": [
+        {
+          "date": "2023-11-02",
+          "return": -0.0753148731903065,
+          "ratio": 5.73090388611573,
+          "near_roll": "2023-11-01",
+          "weather_co_located": false
+        }
+      ],
+      "x_sigma": 5.0
+    }
+  },
+  "locked": {
+    "pit_rows": 1612,
+    "oos_rows": 1247,
+    "span_years": 3.4113620807665983,
+    "benchmark_2sess_pct": 0.24054917097990308,
+    "cost_round_trip_bps": 30.0,
+    "n_episodes_total": 16,
+    "n_episodes_oos": 13
+  },
+  "engine_context": {
+    "full_oos_total_return": -0.09368712808167573,
+    "full_oos_daily_equity_sharpe": -0.46421365504738255,
+    "full_oos_trades": 7,
+    "cross_validation": {
+      "matched_trades": 7,
+      "n_oos_events": 7,
+      "unmatched_events": [],
+      "max_return_abs_error": 1.3877787807814457e-16,
+      "price_mismatches": 0
+    },
+    "per_fold": [
+      {
+        "fold": "fold1",
+        "start": "2022-11-01",
+        "end": "2023-10-31",
+        "total_return": -0.03187581093998661,
+        "daily_equity_sharpe": -2.364774917804636,
+        "n_trades": 1,
+        "max_drawdown": 0.03187581093998661
+      },
+      {
+        "fold": "fold2",
+        "start": "2023-11-01",
+        "end": "2024-10-31",
+        "total_return": -0.007498431329425424,
+        "daily_equity_sharpe": -0.7416788532475966,
+        "n_trades": 1,
+        "max_drawdown": 0.029546795679678443
+      },
+      {
+        "fold": "fold3",
+        "start": "2024-11-01",
+        "end": "2025-10-31",
+        "total_return": 0.025954814454029546,
+        "daily_equity_sharpe": 0.2565925813819562,
+        "n_trades": 1,
+        "max_drawdown": 0.0015
+      },
+      {
+        "fold": "fold4",
+        "start": "2025-11-01",
+        "end": "2026-03-31",
+        "total_return": -0.08063568824255013,
+        "daily_equity_sharpe": -0.7192256463594079,
+        "n_trades": 4,
+        "max_drawdown": 0.20491502271789466
+      }
+    ]
+  },
+  "provenance": {
+    "model_version": "GFS-0p50",
+    "archive": "noaa-gfs-bdp-pds",
+    "n_trades": 7,
+    "n_trades_with_provenance": 7,
+    "forecast_cycle_ids": [
+      "20221221_12z",
+      "20240115_12z",
+      "20250118_12z",
+      "20260114_12z",
+      "20260125_12z",
+      "20260130_12z",
+      "20260221_12z"
+    ],
+    "costs_bps_range": [
+      29.999999999999993,
+      30.00000000000003
+    ],
+    "costs_match_locked_round_trip": true
+  },
+  "signal": {
+    "name": "ColdGrip",
+    "kind": "T4 registered redefined signal",
+    "registration": "docs/T4_CANDIDATE_REGISTRATION.md",
+    "params": {
+      "theta_p_estimator": "median(freeze_prob) over fold train freeze rows",
+      "theta_t_c": 0.0,
+      "free_parameters": 1,
+      "hold_sessions": 2
+    },
+    "fold_thresholds": [
+      {
+        "fold": "fold1",
+        "train_end": "2022-10-31",
+        "theta_p": 0.04040404040404041,
+        "theta_t": 0.0,
+        "n_entries": 1
+      },
+      {
+        "fold": "fold2",
+        "train_end": "2023-10-31",
+        "theta_p": 0.04040404040404041,
+        "theta_t": 0.0,
+        "n_entries": 1
+      },
+      {
+        "fold": "fold3",
+        "train_end": "2024-10-31",
+        "theta_p": 0.04242424242424243,
+        "theta_t": 0.0,
+        "n_entries": 1
+      },
+      {
+        "fold": "fold4",
+        "train_end": "2025-10-31",
+        "theta_p": 0.03434343434343434,
+        "theta_t": 0.0,
+        "n_entries": 4
+      }
+    ],
+    "n_trades": 7
+  },
+  "metrics": {
+    "n_events": 7,
+    "mean_gross": -0.006966630299085365,
+    "mean_net": -0.009966630299085368,
+    "mean_net_of_benchmark": -0.012372122008884398,
+    "gross_sharpe": -0.1085062683641997,
+    "net_sharpe": -0.15523169961542257,
+    "net_of_benchmark_sharpe": -0.19269757878595625,
+    "t_stat": -0.3559099804665614,
+    "ci_95_net_of_benchmark_sharpe": [
+      -1.019174071191004,
+      2.1104863136704397
+    ],
+    "win_rate": 0.5714285714285714,
+    "_cost": 0.003
+  },
+  "significance": {
+    "n_events": 7,
+    "power_class": "under-powered (N < N_min)",
+    "mean_net_of_benchmark": -0.012372122008884398,
+    "classic_t": -0.3559099804665614,
+    "newey_west_t": -0.5896100499609181,
+    "newey_west_lag": 2,
+    "net_of_benchmark_sharpe": -0.19269757878595625,
+    "ci_95_net_of_benchmark_sharpe": [
+      -1.019174071191004,
+      2.1104863136704397
+    ],
+    "bootstrap_pvalue_edge_gt_zero": 0.6302369763023697,
+    "distribution": {
+      "n_resamples": 10000,
+      "percentiles": {
+        "p1": -1.22585806884515,
+        "p5": -0.8791006226723332,
+        "p25": -0.46155666435521153,
+        "p50": -0.15879424979148096,
+        "p75": 0.47502054954378453,
+        "p95": 1.810875403344144,
+        "p99": 3.4644278669393165
+      }
+    },
+    "overlap_check": {
+      "n_overlapping_events": 0,
+      "purging_needed": false
+    },
+    "decision": {
+      "outcome": "UNDER_POWERED",
+      "reason": "N=7 < N_min=8: no conclusion; G1 recorded UNDER-POWERED, freeze thesis defers to Phase 2 live paper-trading to accumulate events"
+    },
+    "_cost": 0.003
+  },
+  "events": {
+    "n_all_episodes": 7,
+    "n_oos_events": 7,
+    "n_scored": 7,
+    "holds_merged_in_engine": false,
+    "n_embargoed": 0,
+    "n_weekend_entries_oos": 2,
+    "n_next_close_entries_oos": 4
+  },
+  "note": "T1 plumbing demonstration + T2 provenance + T3/T4 armor. T4 registered candidate 'ColdGrip': freeze_prob >= theta_p (median over fold train freeze rows) AND temperature_min <= 0C, first firing row per episode = entry, <= 1 trade/episode, 2-session hold (locked). Thresholds re-estimated inside walk-forward folds; no ojd_*/fwd* read during definition; one-shot (registered before scoring). v1.1: episode gaps are measured in trading sessions between executable fill sessions; non-trading-day cycles fill at the NEXT trading close (no prior-close lookahead). Every engine trade logs forecast_cycle_id / publication_ts / model_version / archive / roll_state / costs_incurred (T2). Armor is armed: timestamp layer (features precede the 14:00 NY decision cutoff, 48h feature window, feature/outcome separation), vintage layer (as-published noaa-gfs-bdp-pds + pinned cycle hashes) and roll-jump layer (X=5x daily_sigma at a roll date, WS-0 machinery) \u2014 a leak INVALIDATES the run."
+}

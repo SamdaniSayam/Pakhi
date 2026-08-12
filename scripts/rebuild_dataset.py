@@ -20,6 +20,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from pakhi.ws1.armor import run_armor
+from pakhi.ws1.pit import validate_pit_frame
+from pakhi.ws1.provenance import ARCHIVE
+
 HERE = Path(__file__).resolve().parent.parent
 SCRIPTS = HERE / "scripts"
 GFS = HERE / "data" / "gfs"
@@ -84,7 +88,7 @@ def _refresh_inventory() -> pd.DataFrame:
                 "cycle": cycle_s,
                 "lead": lead,
                 "file": name,
-                "source": "aws",
+                "source": ARCHIVE,
                 "nbytes": p.stat().st_size,
             }
         )
@@ -129,20 +133,36 @@ def gate_schema(inv: pd.DataFrame) -> tuple[bool, str]:
 
 
 def gate_pit() -> tuple[bool, str]:
+    # Single source of truth: the WS-1 PIT validator (T1 integration).
     pit = pd.read_parquet(WS0 / "freeze_pit.parquet")
-    if pit.empty:
-        return False, "PIT frame empty"
-    if pit["fwd_return"].abs().max() > 0.5:
-        return False, "PIT forward returns implausible (>50%)"
-    detail = "PIT {} rows, fwd_return range [{:.2f}, {:.2f}]".format(
-        len(pit), pit["fwd_return"].min(), pit["fwd_return"].max()
-    )
-    return True, detail
+    return validate_pit_frame(pit)
 
 
 def gate_staleness(inv: pd.DataFrame) -> tuple[bool, str]:
     last = inv["date"].astype(str).str[:8].max()
     return last == BACKFILL["end"].replace("-", ""), f"last cycle {last}"
+
+
+def gate_armor() -> tuple[bool, str]:
+    """T3 Lookahead Armor: timestamp + vintage layers over the rebuilt PIT."""
+    pit = pd.read_parquet(WS0 / "freeze_pit.parquet")
+    sessions = pd.read_parquet(MARKET / "oj_continuous.parquet").index
+    try:
+        summary = run_armor(pit, sessions, manifest=None, gfs_dir=GFS)
+    except Exception as exc:  # LookaheadError or missing manifest
+        return False, str(exc)
+    ts, vg = summary["timestamp"], summary["vintage"]
+    return (
+        True,
+        "timestamp: {} rows, {} post-cutoff, {} horizon violations; "
+        "vintage: {} cycles in manifest, {} hash drift".format(
+            ts["n_rows"],
+            ts["publish_after_cutoff"],
+            ts["event_peak_outside_horizon"],
+            vg["n_cycles_in_manifest"],
+            vg["n_hash_drift"],
+        ),
+    )
 
 
 def main() -> None:
@@ -177,12 +197,17 @@ def main() -> None:
     ]
     inv = _refresh_inventory()  # full provenance inventory from files on disk
     raw_inv = inv.copy()
+    from pakhi.ws1.armor import MANIFEST_PATH, build_vintage_manifest
+
+    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST_PATH.write_text(json.dumps(build_vintage_manifest(GFS), indent=1))
 
     gates = {
         "completeness": gate_completeness(raw_inv),
         "schema": gate_schema(inv),
         "staleness": gate_staleness(raw_inv),
         "pit": gate_pit(),
+        "armor": gate_armor(),
     }
     manifest = {
         "generated_utc": pd.Timestamp.now("UTC").isoformat(),
@@ -195,6 +220,7 @@ def main() -> None:
             "cycle_inventory": _sha256(GFS / "cycle_inventory.csv"),
             "oj_continuous": _sha256(MARKET / "oj_continuous.parquet"),
             "freeze_pit": _sha256(WS0 / "freeze_pit.parquet"),
+            "gfs_vintage_manifest": _sha256(MANIFEST_PATH),
         },
     }
     (WS0 / "manifest.json").write_text(json.dumps(manifest, indent=2))

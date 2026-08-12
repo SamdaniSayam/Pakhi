@@ -48,6 +48,11 @@ class Signal:
         Human-readable explanation of the signal.
     metadata : dict
         Arbitrary extra data (model name, thresholds, etc.).
+    provenance : dict
+        Standardised T2 provenance trail carried from the PIT frame:
+        ``forecast_cycle_id``, ``publication_ts``, ``model_version``, and the
+        contract ``roll_state``.  The ``BacktestEngine`` extracts this and
+        injects it into the trade log along with ``costs_incurred``.
     """
 
     action: Action
@@ -57,6 +62,7 @@ class Signal:
     timestamp: datetime
     reasoning: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if isinstance(self.action, str):

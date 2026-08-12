@@ -1,16 +1,22 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "status": "LOCKED",
   "locked_utc": "2026-08-11T00:00:00+00:00",
   "gate": "G1",
   "instrument": "OJ=F",
   "source_doc": "docs/WS1_EVALUATION_CONTRACT.md",
+  "amendment": {
+    "from_version": "1.0",
+    "effective_utc": "2026-08-11T00:00:00+00:00",
+    "summary": "v1.1 fill-timing and episode-segmentation amendment: (1) non-trading-day cycles now fill at the NEXT trading-session close instead of the prior Friday close, eliminating lookahead on weekend/holiday cycles; (2) episode gaps are measured in trading sessions between executable fill sessions instead of calendar days, so a weather event interrupted by a weekend/holiday forms ONE episode. Episode count on the archive is unchanged (16 total / 13 OOS); scored N rises 12 -> 13 (2025-11-09 Sunday entry now fills 2025-11-10, outside the fold4 head embargo). Benchmark recomputed on executable fills: +0.2405% per 2 sessions (was +0.1722%). Prior v1.0 results void per change_control."
+  },
   "pit": {
     "path": "data/ws0/freeze_pit.parquet",
     "rows": 1612,
     "start": "2021-11-01",
     "end": "2026-03-31",
-    "two_session_outcomes_available": 1612
+    "two_session_outcomes_available": 1612,
+    "fill_base": "first trading session ON/AFTER the cycle date (next trading close for weekend/holiday cycles)"
   },
   "folds": {
     "type": "season-block expanding-window walk-forward",
@@ -37,7 +43,7 @@
     "oos_span_years": 3.4114
   },
   "events": {
-    "definition": "run of consecutive PIT rows with freeze_prob>0; gap>2 calendar days starts a new episode",
+    "definition": "maximal run of PIT rows with freeze_prob>0 grouped by executable fill session; two freeze rows split into new episodes iff their fill sessions are >= 2 trading sessions apart",
     "total_episodes": 16,
     "oos_episodes": 13,
     "trades_per_episode_max": 1
@@ -55,12 +61,12 @@
     "one_shot": true
   },
   "trade": {
-    "entry": "fill at base session close (ojd_close) on first firing row of episode",
+    "entry": "fill at the first trading-session close ON/AFTER the episode firing row's cycle date (ojd_close); same-day for trading days, next trading close for weekend/holiday cycles",
     "hold_sessions": 2,
-    "gross_return": "close[D+2]/close[D]-1",
+    "gross_return": "close[fill+2]/close[fill]-1",
     "costs_bps_round_trip": 30,
     "costs_breakdown": "5 bps commission + 10 bps slippage per position change x2",
-    "fill_timing": "signal at day i -> fill at close of day i"
+    "fill_timing": "signal from the D 12Z cycle (published ~15:35Z) -> fill at the first trading close on/after D; no prior-close fill"
   },
   "metric": {
     "type": "event-based trade-level net-of-benchmark Sharpe, pooled across folds",
@@ -80,7 +86,7 @@
   },
   "benchmark": {
     "definition": "always-long OJ over matched 2-session window",
-    "rbar_2sess_oos": 0.001722,
+    "rbar_2sess_oos": 0.0024055,
     "net_of_benchmark_return": "gross - 0.0030 - rbar"
   },
   "decision_rules": {
@@ -101,5 +107,5 @@
     "pre-registration committed to git"
   ],
   "change_control": "any amendment requires new version + re-lock; prior results void",
-  "payload_sha256": "204ccf5cc46ab5c4cde43ee6d14f93e12feb4dc89f26d0d0f921c2e0d47d697f"
+  "payload_sha256": "31d093c1712b93deebf8fb65dc02bf5db31088d8f7e64f186c18afe1da8d056a"
 }

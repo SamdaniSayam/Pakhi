@@ -1,8 +1,21 @@
-# WS-1 Evaluation Contract v1.0 (LOCKED)
+# WS-1 Evaluation Contract v1.1 (LOCKED)
 
 **Status:** LOCKED 2026-08-11. Pre-registered before any backtest or signal
 tuning. Amendments require a new version and re-lock (see §11).
 Machine-readable twin: `data/ws1/evaluation_contract.json` (hash-pinned).
+
+**v1.1 amendment (effective 2026-08-11):**
+1. **Fill timing:** non-trading-day cycles now fill at the **next** trading-session
+   close instead of the prior Friday close — eliminating lookahead on
+   weekend/holiday cycles (a Saturday 15:35Z cycle previously filled at Friday's
+   close, i.e. on information not yet published).
+2. **Episode segmentation:** gaps are measured in **trading sessions between
+   executable fill sessions**, not calendar days — a weather event interrupted by
+   a weekend/holiday forms **one** episode.
+3. Episode count on the archive is **unchanged (16 / 13)**; scored N rises **12 → 13**
+   (the 2025-11-09 Sunday entry now fills 2025-11-10, outside the fold-4 head
+   embargo). Benchmark recomputed on executable fills: **+0.2405 %** per 2 sessions
+   (was +0.1722 %). Prior v1.0 results void (see §11).
 
 The purpose of this contract is to make G1 **falsifiable and non-gamable**:
 every rule that could otherwise become a researcher degree of freedom
@@ -18,7 +31,8 @@ advance, from the real data.
 | Instrument | OJ=F — back-adjusted continuous close (`data/market/oj_continuous.parquet` → PIT `ojd_close`/`ojd_next_close`) |
 | Signal universe | `data/ws0/freeze_pit.parquet` (1612 PIT rows, 2021-11-01 → 2026-03-31) |
 | As-published requirement | All features from `noaa-gfs-bdp-pds` archive (asserted in T3); no ERA5 in test |
-| 2-session outcome | Computable for **all** 1612 rows (0 missing) — `close[D+2]/close[D] − 1` |
+| 2-session outcome | Computable for **all** 1612 rows (0 missing) — `close[fill+2]/close[fill] − 1` |
+| Fill base (v1.1) | **First trading session on/after** the cycle date — same-day close for trading days, **next** trading close for weekend/holiday cycles |
 
 ## 2. Windows & folds (locked)
 
@@ -37,11 +51,14 @@ Season-block **expanding-window** walk-forward. Fold = freeze season
   2022-11-01 → 2026-03-31 (**span = 3.4114 years**).
 - **Embargo:** the first **5 sessions** of each test fold are purged from
   scoring (drains autocorrelation bleed from adjacent train data).
-- **Event definition (locked):** a *freeze episode* = maximal run of
-  consecutive PIT rows with `freeze_prob > 0`; a gap of **> 2 calendar days**
-  starts a new episode. Measured on real data: **16 episodes total**, of which
-  **13 fall inside the OOS window** → the maximum achievable OOS event-trade
-  count is **13**.
+- **Event definition (locked, v1.1):** a *freeze episode* = maximal run of PIT
+  rows with `freeze_prob > 0` grouped by **executable fill session**. Two
+  freeze rows split into new episodes iff their fill sessions are **≥ 2
+  trading sessions apart** (more than one session strictly in between).
+  Measured on the real archive: **16 episodes total**, of which **13 fall
+  inside the OOS window** → the maximum achievable OOS event-trade count is
+  **13**. (Unchanged from v1.0; the session rule is the hardened, weekend-safe
+  formulation.)
 
 ## 3. Sample-size rule (locked, shrunk edge claim — per blueprint T5)
 
@@ -72,16 +89,18 @@ highest defensible bar the data can support:
 ## 5. Trade construction & costs (locked)
 
 - **Entry:** signal fires on PIT row with cycle date `c` → fill at the close of
-  the trading session whose close = `ojd_close` (the base session). Weekend
-  cycles map to the prior Friday close.
+  the **first trading session on/after** `c` (the session whose close =
+  `ojd_close`). Same-day close for trading days; weekend/holiday cycles fill at
+  the **next** trading close (v1.1 — never the prior Friday close, no lookahead).
 - **Hold:** fixed **2 trading sessions** (entry session close → 2nd next trading
   close), matching the ≥ 2-session rule for the 48 h feature window.
-  (`ojd_close_2` = `close[D+2]`.)
-- **Gross event return:** `gross = close[D+2]/close[D] − 1`.
+  (`ojd_close_2` = `close[fill+2]`.)
+- **Gross event return:** `gross = close[fill+2]/close[fill] − 1`.
 - **Costs:** 5 bps commission + 10 bps slippage **per position change**; entry +
   exit = **30 bps round trip**. `net = gross − 0.0030`.
-- **Fill timing convention:** signal at day `i` → fill at close of day `i`
-  (executable: GFS publish 15:35Z precedes the 19:00Z close).
+- **Fill timing convention:** signal from the `D` 12Z cycle (published ~15:35Z)
+  → fill at the first trading close on/after `D` (executable: the publish
+  precedes any fill close).
 
 ## 6. Metric (locked — event-based, trade-level, pooled)
 
@@ -98,7 +117,8 @@ highest defensible bar the data can support:
 Per-event comparison versus **always-long OJ**:
 
 - `r̄_2sess` = mean 2-session OJ return over the OOS window
-  (= **+0.1722 %** on the current data; recomputed by the harness).
+  (= **+0.2405 %** on the current data, v1.1 executable fills; recomputed by
+  the harness).
 - **net-of-benchmark event return** =
   `(gross_event − 0.0030) − r̄_2sess`.
 - A matched long-short hedge variant (`2 × gross − 2 × costs`) is reported as
@@ -138,9 +158,11 @@ the architecture doing its job.
 ## 11. Change control
 
 Any amendment to this contract (metric, split, threshold policy, costs,
-sample-size rule) requires a new version `v1.1` with rationale, and
+sample-size rule) requires a new version `v1.(n+1)` with rationale, and
 **re-locking before any result is final**. Results from a previous version are
-void for G1.
+void for G1. **v1.0 → v1.1** (2026-08-11): fill-timing amendment (next trading
+close for weekend/holiday cycles, eliminating prior-close lookahead) and
+session-based episode segmentation (see header).
 
 ---
 

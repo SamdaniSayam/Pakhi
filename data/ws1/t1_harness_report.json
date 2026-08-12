@@ -1,0 +1,158 @@
+{
+  "valid": true,
+  "validation": "PIT 1612 rows, fwd_return range [-0.12, 0.13], fwd2 range [-0.20, 0.23]",
+  "armor": {
+    "pass": true,
+    "timestamp": {
+      "n_rows": 1612,
+      "publish_after_cutoff": 0,
+      "min_publish_margin_hours": 2.5,
+      "event_peak_outside_horizon": 0,
+      "feature_horizon_hours": 48,
+      "feature_outcome_separation": true
+    },
+    "vintage": {
+      "archive": "noaa-gfs-bdp-pds",
+      "n_pit_cycles": 1612,
+      "n_cycles_in_manifest": 1612,
+      "source_match": true,
+      "n_hash_drift": 0,
+      "recorded_utc": "2026-08-11T17:54:37.015808+00:00"
+    },
+    "roll_jump": {
+      "n_rolls": 34,
+      "n_flagged_rolls": 0,
+      "flagged_rolls": [],
+      "unmodeled_roll_gaps": [],
+      "n_near_roll_extreme_moves": 1,
+      "near_roll_extreme_moves": [
+        {
+          "date": "2023-11-02",
+          "return": -0.0753148731903065,
+          "ratio": 5.73090388611573,
+          "near_roll": "2023-11-01",
+          "weather_co_located": false
+        }
+      ],
+      "x_sigma": 5.0
+    }
+  },
+  "locked": {
+    "pit_rows": 1612,
+    "oos_rows": 1247,
+    "span_years": 3.4113620807665983,
+    "benchmark_2sess_pct": 0.24054917097990308,
+    "cost_round_trip_bps": 30.0,
+    "n_episodes_total": 16,
+    "n_episodes_oos": 13
+  },
+  "engine_context": {
+    "full_oos_total_return": -0.22048809126582508,
+    "full_oos_daily_equity_sharpe": -0.8211387609358943,
+    "full_oos_trades": 13,
+    "cross_validation": {
+      "matched_trades": 13,
+      "n_oos_events": 13,
+      "unmatched_events": [],
+      "max_return_abs_error": 2.636779683484747e-16,
+      "price_mismatches": 0
+    },
+    "per_fold": [
+      {
+        "fold": "fold1",
+        "start": "2022-11-01",
+        "end": "2023-10-31",
+        "total_return": -0.04485482750841638,
+        "daily_equity_sharpe": -2.6550006369636217,
+        "n_trades": 2,
+        "max_drawdown": 0.04485482750841638
+      },
+      {
+        "fold": "fold2",
+        "start": "2023-11-01",
+        "end": "2024-10-31",
+        "total_return": -0.007498431329425424,
+        "daily_equity_sharpe": -0.7416788532475966,
+        "n_trades": 1,
+        "max_drawdown": 0.029546795679678443
+      },
+      {
+        "fold": "fold3",
+        "start": "2024-11-01",
+        "end": "2025-10-31",
+        "total_return": -0.04966709123502928,
+        "daily_equity_sharpe": -0.9806671018972741,
+        "n_trades": 3,
+        "max_drawdown": 0.06470197730541127
+      },
+      {
+        "fold": "fold4",
+        "start": "2025-11-01",
+        "end": "2026-03-31",
+        "total_return": -0.1347404548265955,
+        "daily_equity_sharpe": -1.2045342787765618,
+        "n_trades": 7,
+        "max_drawdown": 0.2049150227178946
+      }
+    ]
+  },
+  "provenance": {
+    "model_version": "GFS-0p50",
+    "archive": "noaa-gfs-bdp-pds",
+    "n_trades": 13,
+    "n_trades_with_provenance": 13,
+    "forecast_cycle_ids": [
+      "20221221_12z",
+      "20230113_12z",
+      "20240115_12z",
+      "20250105_12z",
+      "20250118_12z",
+      "20250219_12z",
+      "20251109_12z",
+      "20251213_12z",
+      "20251229_12z",
+      "20260114_12z",
+      "20260125_12z",
+      "20260130_12z",
+      "20260221_12z"
+    ],
+    "costs_bps_range": [
+      29.999999999999993,
+      30.00000000000003
+    ],
+    "costs_match_locked_round_trip": true
+  },
+  "signal": {
+    "name": "DemoEveryEpisode",
+    "kind": "parameter-free demo generator (max-load plumbing exercise)",
+    "params": {},
+    "fold_thresholds": [],
+    "n_trades": 16
+  },
+  "metrics": {
+    "n_events": 13,
+    "mean_gross": -0.013604087507761568,
+    "mean_net": -0.01660408750776157,
+    "mean_net_of_benchmark": -0.0190095792175606,
+    "gross_sharpe": -0.3834561975425852,
+    "net_sharpe": -0.46801670863687467,
+    "net_of_benchmark_sharpe": -0.5358199114414354,
+    "t_stat": -0.9896525707079321,
+    "ci_95_net_of_benchmark_sharpe": [
+      -1.388598060066005,
+      0.6710910827531628
+    ],
+    "win_rate": 0.38461538461538464,
+    "_cost": 0.003
+  },
+  "events": {
+    "n_all_episodes": 16,
+    "n_oos_events": 13,
+    "n_scored": 13,
+    "holds_merged_in_engine": false,
+    "n_embargoed": 0,
+    "n_weekend_entries_oos": 6,
+    "n_next_close_entries_oos": 7
+  },
+  "note": "T1 plumbing demonstration + T2 provenance + T3/T4 armor. Signal = parameter-free demo generator fires at every episode start (max-load exercise). NOT a registered T4 candidate; no G1 decision drawn (T6). v1.1: episode gaps are measured in trading sessions between executable fill sessions; non-trading-day cycles fill at the NEXT trading close (no prior-close lookahead). Every engine trade logs forecast_cycle_id / publication_ts / model_version / archive / roll_state / costs_incurred (T2). Armor is armed: timestamp layer (features precede the 14:00 NY decision cutoff, 48h feature window, feature/outcome separation), vintage layer (as-published noaa-gfs-bdp-pds + pinned cycle hashes) and roll-jump layer (X=5x daily_sigma at a roll date, WS-0 machinery) \u2014 a leak INVALIDATES the run."
+}

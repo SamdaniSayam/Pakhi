@@ -104,9 +104,7 @@ class TestLedgerSemantics:
         assert rep["valid"]
         pit_by_date = pit.set_index("date")
         for _, ev in led.iterrows():
-            expected_gross = float(
-                pit_by_date.loc[pd.Timestamp(ev["entry_cycle"]), "fwd2_return"]
-            )
+            expected_gross = float(pit_by_date.loc[pd.Timestamp(ev["entry_cycle"]), "fwd2_return"])
             assert ev["gross"] == pytest.approx(expected_gross, abs=1e-12)
             assert ev["net"] == pytest.approx(ev["gross"] - COST, abs=1e-15)
 
@@ -119,8 +117,9 @@ class TestLedgerSemantics:
         pit = load_pit()
         led = _build_ledger(pit, sessions, benchmark_2sess(pit))
         for _, ev in led.iterrows():
-            i, j = sessions.get_loc(pd.Timestamp(ev["entry_session"])), sessions.get_loc(
-                pd.Timestamp(ev["exit_session"])
+            i, j = (
+                sessions.get_loc(pd.Timestamp(ev["entry_session"])),
+                sessions.get_loc(pd.Timestamp(ev["exit_session"])),
             )
             assert j - i == 2
 

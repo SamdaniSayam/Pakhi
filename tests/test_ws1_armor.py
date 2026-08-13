@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -50,6 +51,8 @@ def sessions():
 @pytest.fixture(scope="module")
 def manifest():
     if not MANIFEST_PATH.exists():
+        if not GFS.exists():
+            pytest.skip("GFS archive not found in CI environment, skipping vintage armor tests.")
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST_PATH.write_text(json.dumps(build_vintage_manifest(GFS), indent=1))
     return json.loads(MANIFEST_PATH.read_text())
@@ -58,11 +61,15 @@ def manifest():
 class TestDecisionCutoff:
     def test_est_close_1900_utc(self):
         # January: New York is EST (UTC-5) -> 14:00 = 19:00 UTC.
-        assert decision_cutoff(pd.Timestamp("2023-01-10")) == pd.Timestamp("2023-01-10 19:00:00+00:00")
+        assert decision_cutoff(pd.Timestamp("2023-01-10")) == pd.Timestamp(
+            "2023-01-10 19:00:00+00:00"
+        )
 
     def test_edt_close_1800_utc(self):
         # July: New York is EDT (UTC-4) -> 14:00 = 18:00 UTC.
-        assert decision_cutoff(pd.Timestamp("2023-07-10")) == pd.Timestamp("2023-07-10 18:00:00+00:00")
+        assert decision_cutoff(pd.Timestamp("2023-07-10")) == pd.Timestamp(
+            "2023-07-10 18:00:00+00:00"
+        )
 
 
 class TestTimestampArmor:
@@ -84,10 +91,9 @@ class TestTimestampArmor:
 
     def test_raises_on_event_peak_beyond_horizon(self, pit, sessions):
         leaked = pit.copy()
-        leaked.loc[leaked.index[0], "event_peak_time"] = (
-            leaked.loc[leaked.index[0], "publish_time"]
-            + pd.Timedelta(hours=FEATURE_HORIZON_HOURS + 1)
-        )
+        leaked.loc[leaked.index[0], "event_peak_time"] = leaked.loc[
+            leaked.index[0], "publish_time"
+        ] + pd.Timedelta(hours=FEATURE_HORIZON_HOURS + 1)
         with pytest.raises(LookaheadError, match="outside"):
             check_timestamp_armor(leaked, sessions)
 
@@ -131,12 +137,19 @@ class TestVintageArmor:
         with pytest.raises(LookaheadError, match="drifted"):
             check_vintage_armor(pit, manifest=bad, gfs_dir=GFS)
 
+    @pytest.mark.skipif(
+        not GFS.exists(),
+        reason="GFS archive (data/gfs) not found in CI environment",
+    )
     def test_manifest_structure(self, manifest):
         assert manifest["source"] == "noaa-gfs-bdp-pds"
         assert manifest["n_cycles"] == len(manifest["cycles"])
         first = next(iter(manifest["cycles"].values()))
         assert {"n_files", "nbytes", "sha256"} <= set(first)
-        assert first["sha256"] == build_vintage_manifest(GFS)["cycles"][next(iter(manifest["cycles"]))]["sha256"]
+        assert (
+            first["sha256"]
+            == build_vintage_manifest(GFS)["cycles"][next(iter(manifest["cycles"]))]["sha256"]
+        )
 
 
 class TestRunArmor:
@@ -171,7 +184,12 @@ class TestEngineLookaheadArmor:
             )
 
         return BacktestEngine().run(
-            gen, data, initial_capital=100_000, commission_bps=5, slippage_bps=10, instrument="X",
+            gen,
+            data,
+            initial_capital=100_000,
+            commission_bps=5,
+            slippage_bps=10,
+            instrument="X",
             lookahead_armor=armor,
         )
 
@@ -198,13 +216,22 @@ class TestEngineLookaheadArmor:
                     reasoning="t",
                 )
             return Signal(
-                action=Action.FLAT, size=0.0, confidence=0.0, instrument="X",
-                timestamp=d.index[i], reasoning="flat",
+                action=Action.FLAT,
+                size=0.0,
+                confidence=0.0,
+                instrument="X",
+                timestamp=d.index[i],
+                reasoning="flat",
             )
 
         with pytest.raises(LookaheadError, match="signal timestamp"):
             BacktestEngine().run(
-                gen, data, initial_capital=100_000, commission_bps=5, slippage_bps=10, instrument="X",
+                gen,
+                data,
+                initial_capital=100_000,
+                commission_bps=5,
+                slippage_bps=10,
+                instrument="X",
                 lookahead_armor=True,
             )
 
@@ -227,14 +254,24 @@ class TestEngineLookaheadArmor:
                     provenance={"forecast_cycle_id": "20231231_12z"},
                 )
             return Signal(
-                action=Action.FLAT, size=0.0, confidence=0.0, instrument="X",
-                timestamp=d.index[i], reasoning="flat",
+                action=Action.FLAT,
+                size=0.0,
+                confidence=0.0,
+                instrument="X",
+                timestamp=d.index[i],
+                reasoning="flat",
             )
 
         with pytest.raises(LookaheadError, match="future cycle"):
             BacktestEngine().walk_forward(
-                gen, data, train_window=2, test_window=2,
-                initial_capital=100_000, commission_bps=5, slippage_bps=10, instrument="X",
+                gen,
+                data,
+                train_window=2,
+                test_window=2,
+                initial_capital=100_000,
+                commission_bps=5,
+                slippage_bps=10,
+                instrument="X",
                 lookahead_armor=True,
             )
 
@@ -334,6 +371,10 @@ class TestRollJumpArmor:
 
 
 class TestStandaloneRunner:
+    @pytest.mark.skipif(
+        not Path("data/ws0/freeze_pit.parquet").exists(),
+        reason="Real PIT data not found in CI environment",
+    )
     def test_t3_armor_script_exits_zero_on_real_data(self):
         r = subprocess.run(
             [sys.executable, "scripts/run_t3_armor.py"], capture_output=True, text=True

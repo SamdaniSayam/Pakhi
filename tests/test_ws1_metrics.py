@@ -85,12 +85,12 @@ class TestEventMetrics:
         assert m["mean_net"] == pytest.approx((0.007 - 0.023 + 0.002) / 3)
         nb = np.array([0.005, -0.025, 0.0])
         assert m["mean_net_of_benchmark"] == pytest.approx(nb.mean())
-        assert m["net_of_benchmark_sharpe"] == pytest.approx(
-            annualized_sharpe(nb, 3.0)
-        )
+        assert m["net_of_benchmark_sharpe"] == pytest.approx(annualized_sharpe(nb, 3.0))
         assert m["t_stat"] == pytest.approx(t_stat(nb))
         assert m["win_rate"] == pytest.approx(2 / 3)
-        assert m["gross_sharpe"] == pytest.approx(annualized_sharpe(np.array([0.01, -0.02, 0.005]), 3.0))
+        assert m["gross_sharpe"] == pytest.approx(
+            annualized_sharpe(np.array([0.01, -0.02, 0.005]), 3.0)
+        )
 
     def test_empty_ledger(self):
         m = event_metrics(pd.DataFrame(), benchmark_mean=0.002, span_years=3.0)

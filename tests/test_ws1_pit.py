@@ -99,7 +99,10 @@ class TestLockedWindows:
 
     def test_fold_row_counts(self, pit):
         labels = fold_label(pit)
-        counts = {name: int((labels == name).sum()) for name in ["seed", "fold1", "fold2", "fold3", "fold4"]}
+        counts = {
+            name: int((labels == name).sum())
+            for name in ["seed", "fold1", "fold2", "fold3", "fold4"]
+        }
         assert counts == {"seed": 365, "fold1": 365, "fold2": 366, "fold3": 365, "fold4": 151}
 
     def test_oos_span_years_locked(self):

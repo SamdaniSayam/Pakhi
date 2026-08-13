@@ -23,9 +23,7 @@ def _sessions() -> pd.DatetimeIndex:
 
 def _pit_with_episode(start: str) -> pd.DataFrame:
     dates = pd.date_range(start, periods=4, freq="D")
-    return pd.DataFrame(
-        {"date": dates, "freeze_prob": [0.1, 0.1, 0.0, 0.0]}
-    )
+    return pd.DataFrame({"date": dates, "freeze_prob": [0.1, 0.1, 0.0, 0.0]})
 
 
 class TestFillSession:

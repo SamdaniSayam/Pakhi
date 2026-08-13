@@ -70,7 +70,9 @@ def _predecessor() -> dict:
             "g1_report": "docs/WS1_G1_REPORT.md",
             "g1_outcome": rec["outcome"],
             "g1_n_events": rec["headline_metric"]["n_events"],
-            "g1_net_of_benchmark_event_sharpe": rec["headline_metric"]["net_of_benchmark_event_sharpe"],
+            "g1_net_of_benchmark_event_sharpe": rec["headline_metric"][
+                "net_of_benchmark_event_sharpe"
+            ],
             "g1_decision_json": str(G1_DECISION_JSON.relative_to(_HERE)),
         }
     return {
@@ -96,9 +98,7 @@ def build_paper_trading_protocol(
     if pit is None:
         pit = load_pit()
     theta = frozen_theta_p(pit, as_of_date)
-    freeze_rows = int(
-        ((pit["freeze_prob"] > 0) & (pit["date"] <= pd.Timestamp(as_of_date))).sum()
-    )
+    freeze_rows = int(((pit["freeze_prob"] > 0) & (pit["date"] <= pd.Timestamp(as_of_date))).sum())
     rbar = float(benchmark_2sess(pit))
     pred = _predecessor()
 
@@ -201,7 +201,7 @@ def build_paper_trading_protocol(
                 "fetch_date",
             ],
             "db": (
-                "Postgres (TimescaleDB optional at Phase-3 scale); paper ledger columns "
+                "Postgres with TimescaleDB extension strictly required (T0); paper ledger columns "
                 "identical to data/ws1/t4_candidate_ledger.csv so significance_report "
                 "consumes it unmodified"
             ),

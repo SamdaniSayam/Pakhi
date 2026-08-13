@@ -40,16 +40,26 @@ def main() -> None:
     sig = record["signal"]
     tr = record["trade"]
     print("== WS-2 T0: live paper-trading protocol pre-registration ==")
-    print(f"predecessor G1   : {record['predecessor']['g1_outcome']} "
-          f"(N={record['predecessor']['g1_n_events']}, N_min={record['event_counting']['n_min']})")
-    print(f"signal           : {sig['name']} | fire = freeze_prob >= theta_p AND temperature_min <= theta_t")
-    print(f"theta_p (FROZEN) : {sig['theta_p']:.6f} "
-          f"(median of {sig['theta_p_n_historical_freeze_rows']} historical freeze rows, date <= G1 2026-08-12)")
+    print(
+        f"predecessor G1   : {record['predecessor']['g1_outcome']} "
+        f"(N={record['predecessor']['g1_n_events']}, N_min={record['event_counting']['n_min']})"
+    )
+    print(
+        f"signal           : {sig['name']} | fire = freeze_prob >= theta_p AND temperature_min <= theta_t"
+    )
+    print(
+        f"theta_p (FROZEN) : {sig['theta_p']:.6f} "
+        f"(median of {sig['theta_p_n_historical_freeze_rows']} historical freeze rows, date <= G1 2026-08-12)"
+    )
     print(f"theta_t          : {sig['theta_t_c']:.2f} C (fixed physical gate)")
-    print(f"trade            : next-close fill | hold {tr['hold_sessions']} sessions | "
-          f"cost {tr['costs_bps_round_trip']} bps RT | net = gross - 0.0030 - rbar")
-    print(f"benchmark rbar   : always-long OJ 2-session, backtest "
-          f"{record['benchmark']['rbar_2sess_oos_backtest']:.4f}; live recomputed at the G1 re-run")
+    print(
+        f"trade            : next-close fill | hold {tr['hold_sessions']} sessions | "
+        f"cost {tr['costs_bps_round_trip']} bps RT | net = gross - 0.0030 - rbar"
+    )
+    print(
+        f"benchmark rbar   : always-long OJ 2-session, backtest "
+        f"{record['benchmark']['rbar_2sess_oos_backtest']:.4f}; live recomputed at the G1 re-run"
+    )
     print("armor            : timestamp + vintage + roll_jump (violation => cycle rejected)")
     print(f"change control   : {record['change_control']}")
 

@@ -102,9 +102,7 @@ class TestEstimation:
         assert theta["theta_p"] == pytest.approx(
             pit.loc[pit["freeze_prob"] > 0, "freeze_prob"].median(), abs=1e-12
         )
-        row = pd.Series(
-            {"freeze_prob": theta["theta_p"], "temperature_min": TEMP_GATE_C - 1}
-        )
+        row = pd.Series({"freeze_prob": theta["theta_p"], "temperature_min": TEMP_GATE_C - 1})
         assert fires(row, theta) is True
 
 
@@ -134,7 +132,8 @@ class TestWalkForwardFiring:
             eid = int(e["episode_id"])
             sub = ep[ep["episode_id"] == eid]
             firing = sub[
-                (sub["freeze_prob"] >= e["freeze_prob"]) & (sub["temperature_min"] <= e["temperature_min"])
+                (sub["freeze_prob"] >= e["freeze_prob"])
+                & (sub["temperature_min"] <= e["temperature_min"])
             ]
             assert firing.index.min() == sub[sub["date"] == e["entry_cycle"]].index.min()
 
@@ -148,9 +147,12 @@ class TestWalkForwardFiring:
         # Recompute fold-1 entries manually from the seed theta_p and compare.
         theta = estimate_thresholds(_train_rows(pit, 0))
         ep = freeze_episodes(pit, sessions)
-        fold1 = ep[(ep["date"] >= pd.Timestamp("2022-11-01")) & (ep["date"] <= pd.Timestamp("2023-10-31"))]
+        fold1 = ep[
+            (ep["date"] >= pd.Timestamp("2022-11-01")) & (ep["date"] <= pd.Timestamp("2023-10-31"))
+        ]
         first_firing = fold1[
-            (fold1["freeze_prob"] >= theta["theta_p"]) & (fold1["temperature_min"] <= theta["theta_t"])
+            (fold1["freeze_prob"] >= theta["theta_p"])
+            & (fold1["temperature_min"] <= theta["theta_t"])
         ].sort_values("date")
         assert not first_firing.empty
         entries = candidate_entries(pit, sessions)

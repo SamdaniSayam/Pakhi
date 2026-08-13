@@ -2,7 +2,7 @@
 
 **Status:** LOCKED in writing **before any live event is recorded** (2026-08-12).
 Machine twin: `data/ws2/paper_trading_protocol.json` (payload sha256
-`d59a1f64…`). Scope source: `docs/WS2_EXECUTION_BLUEPRINT.md` §4 T0.
+`1ce98669…`). Scope source: `docs/WS2_EXECUTION_BLUEPRINT.md` §4 T0.
 
 This is the WS-2 twin of the WS-1 evaluation contract
 (`docs/WS1_EVALUATION_CONTRACT.md`): the rules that will later decide the **G1
@@ -118,5 +118,5 @@ raised:
 
 *Protocol + machine JSON approved and hash-pinned; artifacts exist.* — Done:
 `docs/WS2_PAPER_TRADING_PROTOCOL.md` + `data/ws2/paper_trading_protocol.json`
-(payload sha256 `d59a1f64756f000e4f9e5c93026fff629039cf30abb65f533e028dac21a08f84`),
+(payload sha256 `1ce98669f2c3997ce1d19a3fa0d9a709972d7df388f6f5e7f3e91aea48c2cd80`),
 reproduced by `scripts/run_ws2_t0_protocol.py`.

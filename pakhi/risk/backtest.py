@@ -367,10 +367,12 @@ class BacktestEngine:
         """
         from pakhi.ws1.armor import LookaheadError, decision_cutoff
 
-        if signal.timestamp is not None and pd.notna(signal.timestamp) and pd.Timestamp(signal.timestamp) > pd.Timestamp(current):
-            raise LookaheadError(
-                f"signal timestamp {signal.timestamp} > current session {current}"
-            )
+        if (
+            signal.timestamp is not None
+            and pd.notna(signal.timestamp)
+            and pd.Timestamp(signal.timestamp) > pd.Timestamp(current)
+        ):
+            raise LookaheadError(f"signal timestamp {signal.timestamp} > current session {current}")
 
         prov = signal.provenance or {}
         cycle_id = prov.get("forecast_cycle_id")

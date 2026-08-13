@@ -95,14 +95,12 @@ def validate_pit_frame(pit: pd.DataFrame) -> tuple[bool, str]:
         return False, "PIT missing 2-session outcomes"
     if pit["fwd2_return"].abs().max() > 0.5:
         return False, "PIT 2-session returns implausible (>50%)"
-    detail = (
-        "PIT {} rows, fwd_return range [{:.2f}, {:.2f}], fwd2 range [{:.2f}, {:.2f}]".format(
-            len(pit),
-            pit["fwd_return"].min(),
-            pit["fwd_return"].max(),
-            pit["fwd2_return"].min(),
-            pit["fwd2_return"].max(),
-        )
+    detail = "PIT {} rows, fwd_return range [{:.2f}, {:.2f}], fwd2 range [{:.2f}, {:.2f}]".format(
+        len(pit),
+        pit["fwd_return"].min(),
+        pit["fwd_return"].max(),
+        pit["fwd2_return"].min(),
+        pit["fwd2_return"].max(),
     )
     return True, detail
 

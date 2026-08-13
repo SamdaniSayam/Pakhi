@@ -69,7 +69,9 @@ def _engine_on(
     provenance_map: dict | None = None,
 ) -> Any:
     data = oj.loc[pd.Timestamp(start) : pd.Timestamp(end)]
-    gen = make_episode_hold_generator(schedule, instrument=DEMO_INSTRUMENT, provenance_map=provenance_map)
+    gen = make_episode_hold_generator(
+        schedule, instrument=DEMO_INSTRUMENT, provenance_map=provenance_map
+    )
     return BacktestEngine(price_column="close_adj").run(
         gen,
         data,
@@ -274,7 +276,9 @@ def run_harness(
     sessions = oj.index
 
     if armor:
-        report["armor"] = run_armor(pit, sessions, manifest=vintage_manifest, oj=oj, calendar=calendar)
+        report["armor"] = run_armor(
+            pit, sessions, manifest=vintage_manifest, oj=oj, calendar=calendar
+        )
 
     benchmark = benchmark_2sess(pit)
     span_years = oos_span_years()
@@ -282,9 +286,7 @@ def run_harness(
 
     ep = freeze_episodes(pit, sessions)
     n_episodes = int(ep["episode_id"].nunique() - (1 if (ep["episode_id"] == 0).any() else 0))
-    n_oos_episodes = int(
-        ep.loc[ep["episode_start"] & oos_mask(ep), "episode_id"].nunique()
-    )
+    n_oos_episodes = int(ep.loc[ep["episode_start"] & oos_mask(ep), "episode_id"].nunique())
 
     if candidate:
         schedule, fold_thresholds = build_candidate_schedule(pit, sessions)
@@ -316,7 +318,9 @@ def run_harness(
     metrics = event_metrics(scored, benchmark, span_years)
     significance = significance_report(scored, benchmark, span_years)
 
-    engine_full = _engine_on(oj, schedule, str(OOS_START.date()), str(OOS_END.date()), provenance_map)
+    engine_full = _engine_on(
+        oj, schedule, str(OOS_START.date()), str(OOS_END.date()), provenance_map
+    )
     xval = _cross_validate_engine(engine_full.trades, ledger, oj)
     n_scored_events = int((ledger["scored"] if not ledger.empty else []).sum())
     holds_merged = len(engine_full.trades) != n_scored_events
@@ -374,13 +378,9 @@ def run_harness(
                 "n_oos_events": int((ledger["in_oos"] if not ledger.empty else []).sum()),
                 "n_scored": n_scored_events,
                 "holds_merged_in_engine": bool(holds_merged),
-                "n_embargoed": int(
-                    (ledger["embargoed"] if not ledger.empty else []).sum()
-                ),
+                "n_embargoed": int((ledger["embargoed"] if not ledger.empty else []).sum()),
                 "n_weekend_entries_oos": int(
-                    ((ledger["in_oos"] & ledger["entry_weekend"]).sum())
-                    if not ledger.empty
-                    else 0
+                    ((ledger["in_oos"] & ledger["entry_weekend"]).sum()) if not ledger.empty else 0
                 ),
                 "n_next_close_entries_oos": int(
                     ((ledger["in_oos"] & ledger["next_close_fill"]).sum())

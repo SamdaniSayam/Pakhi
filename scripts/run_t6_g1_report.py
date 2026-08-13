@@ -45,21 +45,29 @@ def main() -> None:
     print("== WS-1 T6: G1 hand-off (OJ backtest + decision) ==")
     print(f"signal            : {report['signal']['name']} (pre-registered, one-shot)")
     print("armor             : PASS (timestamp + vintage + roll-jump layers)")
-    print(f"engine cross-val  : matched {xv['matched_trades']} trades | "
-          f"max |d return| {xv['max_return_abs_error']:.2e} | price mismatches {xv['price_mismatches']}")
+    print(
+        f"engine cross-val  : matched {xv['matched_trades']} trades | "
+        f"max |d return| {xv['max_return_abs_error']:.2e} | price mismatches {xv['price_mismatches']}"
+    )
 
     print("\n-- G1 headline (net-of-benchmark event-trade Sharpe, OOS) --")
     print(f"N                  : {sig['n_events']}  (N_min = 8)")
     print(f"power class        : {sig['power_class']}")
     print(f"mean net-of-bench  : {sig['mean_net_of_benchmark'] * 100:+.4f}%")
-    print(f"event Sharpe       : {sig['net_of_benchmark_sharpe']:.3f}  "
-          f"(95% CI {sig['ci_95_net_of_benchmark_sharpe'][0]:.3f}, "
-          f"{sig['ci_95_net_of_benchmark_sharpe'][1]:.3f})")
-    print(f"classic t / NW t   : {sig['classic_t']:.3f} / {sig['newey_west_t']:.3f} (lag {sig['newey_west_lag']})")
+    print(
+        f"event Sharpe       : {sig['net_of_benchmark_sharpe']:.3f}  "
+        f"(95% CI {sig['ci_95_net_of_benchmark_sharpe'][0]:.3f}, "
+        f"{sig['ci_95_net_of_benchmark_sharpe'][1]:.3f})"
+    )
+    print(
+        f"classic t / NW t   : {sig['classic_t']:.3f} / {sig['newey_west_t']:.3f} (lag {sig['newey_west_lag']})"
+    )
     print(f"bootstrap p (edge) : {sig['bootstrap_pvalue_edge_gt_zero']:.3f}")
     print(f"overlap check      : {sig['overlap_check']}")
-    print(f"benchmark (2-sess) : {report['locked']['benchmark_2sess_pct']:+.4f}% | "
-          f"span {report['locked']['span_years']} y | OOS rows {report['locked']['oos_rows']}")
+    print(
+        f"benchmark (2-sess) : {report['locked']['benchmark_2sess_pct']:+.4f}% | "
+        f"span {report['locked']['span_years']} y | OOS rows {report['locked']['oos_rows']}"
+    )
 
     print(f"\nG1 outcome         : {record['outcome']}")
     print(f"  {record['outcome_statement']}")

@@ -121,5 +121,6 @@ def main() -> None:
     print("\nN_min gate (8, context only, decision is T6):", "MET" if ok else "NOT MET")
     raise SystemExit(0)
 
+
 if __name__ == "__main__":
     main()

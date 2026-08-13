@@ -195,7 +195,9 @@ def check_timestamp_armor(pit: pd.DataFrame, sessions: pd.DatetimeIndex) -> dict
                 )
 
     missing_features = [c for c in FEATURE_COLUMNS if c not in pit.columns]
-    contaminated = [c for c in pit.columns if c in FEATURE_COLUMNS and c.startswith(OUTCOME_PREFIXES)]
+    contaminated = [
+        c for c in pit.columns if c in FEATURE_COLUMNS and c.startswith(OUTCOME_PREFIXES)
+    ]
     separated = (not missing_features) and (not contaminated)
     if missing_features:
         errors.append(f"feature vector incomplete, missing columns: {missing_features}")
@@ -330,7 +332,10 @@ def check_roll_jump_armor(
         if roll_dt not in session_pos:
             return False
         pos = session_pos[roll_dt]
-        lo, hi = max(0, pos - ROLL_JUMP_NEAR_SESSIONS), min(len(sessions), pos + ROLL_JUMP_NEAR_SESSIONS + 1)
+        lo, hi = (
+            max(0, pos - ROLL_JUMP_NEAR_SESSIONS),
+            min(len(sessions), pos + ROLL_JUMP_NEAR_SESSIONS + 1),
+        )
         return any(s in modeled for s in session_list[lo:hi])
 
     flagged_rolls: list[dict] = []

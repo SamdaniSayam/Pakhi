@@ -107,7 +107,9 @@ def build_g1_decision(report: dict) -> dict:
 
 def g1_decision_consistent(record: dict) -> bool:
     """True iff the record's self-hash and metric cross-checks still hold."""
-    if record.get("payload_sha256") != record_sha256({k: v for k, v in record.items() if k != "payload_sha256"}):
+    if record.get("payload_sha256") != record_sha256(
+        {k: v for k, v in record.items() if k != "payload_sha256"}
+    ):
         return False
     hm = record["headline_metric"]
     mc = record["metrics_crosscheck"]

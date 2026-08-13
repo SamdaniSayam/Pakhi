@@ -104,7 +104,12 @@ class TestSignificanceReport:
         assert rep["bootstrap_pvalue_edge_gt_zero"] == 1.0
 
     def test_requires_net_of_benchmark_column(self):
-        trades = pd.DataFrame({"net_of_benchmark": [0.01, -0.02, 0.005], "entry_session": pd.to_datetime(["2023-01-02", "2023-02-02", "2023-03-02"])})
+        trades = pd.DataFrame(
+            {
+                "net_of_benchmark": [0.01, -0.02, 0.005],
+                "entry_session": pd.to_datetime(["2023-01-02", "2023-02-02", "2023-03-02"]),
+            }
+        )
         rep = significance_report(trades, 0.0, SPAN)
         assert rep["n_events"] == 3
         assert rep["classic_t"] == pytest.approx(t_stat(np.array([0.01, -0.02, 0.005])), abs=1e-12)

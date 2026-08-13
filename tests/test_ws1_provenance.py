@@ -98,7 +98,9 @@ class TestSignalProvenance:
         assert s.provenance["forecast_cycle_id"] == "20230104_12z"
 
     def test_string_action_coerced_with_provenance(self):
-        s = Signal("LONG", 0.5, 0.8, "OJ_FUTURES", pd.Timestamp("2023-01-04"), "r", provenance=PROVENANCE)
+        s = Signal(
+            "LONG", 0.5, 0.8, "OJ_FUTURES", pd.Timestamp("2023-01-04"), "r", provenance=PROVENANCE
+        )
         assert s.action == Action.LONG
         assert s.provenance["roll_state"]["contract_month"] == "Mar23"
 
@@ -159,8 +161,13 @@ class TestRollState:
         # 2022-02-15 sits between Jan22 and Mar22 first-notice days -> Mar22.
         assert rs.loc[pd.Timestamp("2022-02-15"), "contract_month"] == "Mar22"
         # Adjustment factor must equal the adj/raw ratio of the continuous series.
-        expected = float(cont.loc[pd.Timestamp("2022-02-15"), "close_adj"] / cont.loc[pd.Timestamp("2022-02-15"), "close_raw"])
-        assert rs.loc[pd.Timestamp("2022-02-15"), "adjustment_factor"] == pytest.approx(expected, abs=1e-12)
+        expected = float(
+            cont.loc[pd.Timestamp("2022-02-15"), "close_adj"]
+            / cont.loc[pd.Timestamp("2022-02-15"), "close_raw"]
+        )
+        assert rs.loc[pd.Timestamp("2022-02-15"), "adjustment_factor"] == pytest.approx(
+            expected, abs=1e-12
+        )
         assert rs["roll_rule"].unique().tolist() == ["FND"]
         assert rs["adjustment_type"].unique().tolist() == ["back"]
 

@@ -28,6 +28,11 @@ from pakhi.ws2.protocol import (
     protocol_consistent,
 )
 
+pytestmark = pytest.mark.skipif(
+    not Path("data/ws0/freeze_pit.parquet").exists(),
+    reason="Real PIT data not found in CI environment",
+)
+
 HERE = Path(__file__).resolve().parent.parent
 JSON_PATH = HERE / PROTOCOL_JSON
 
@@ -36,15 +41,15 @@ class TestFrozenThetaP:
     def test_median_of_historical_freeze_rows(self):
         pit = load_pit()
         theta = frozen_theta_p(pit, G1_DATE)
-        freeze = pit.loc[
-            (pit["freeze_prob"] > 0) & (pit["date"] <= G1_DATE), "freeze_prob"
-        ]
+        freeze = pit.loc[(pit["freeze_prob"] > 0) & (pit["date"] <= G1_DATE), "freeze_prob"]
         assert theta["theta_p"] == pytest.approx(freeze.median(), abs=1e-15)
         assert theta["theta_t"] == 0.0
 
     def test_known_frozen_value(self):
         # Locked in the human protocol doc (2026-08-12).
-        assert frozen_theta_p(load_pit(), G1_DATE)["theta_p"] == pytest.approx(0.03636363636363636, abs=1e-15)
+        assert frozen_theta_p(load_pit(), G1_DATE)["theta_p"] == pytest.approx(
+            0.03636363636363636, abs=1e-15
+        )
 
     def test_freeze_rows_count(self):
         pit = load_pit()
@@ -59,6 +64,7 @@ class TestFrozenThetaP:
         # Single source of truth: same median estimator as the WS-1 backtest.
         pit = load_pit()
         from pakhi.ws1.candidate import estimate_thresholds
+
         assert frozen_theta_p(pit, G1_DATE) == estimate_thresholds(pit[pit["date"] <= G1_DATE])
 
 
@@ -88,7 +94,9 @@ class TestProtocolPayload:
             "weekend/holiday cycles; NEVER prior close"
         )
         assert tr["costs_bps_round_trip"] == 30
-        assert rec["benchmark"]["rbar_2sess_oos_backtest"] == pytest.approx(benchmark_2sess(load_pit()), abs=1e-12)
+        assert rec["benchmark"]["rbar_2sess_oos_backtest"] == pytest.approx(
+            benchmark_2sess(load_pit()), abs=1e-12
+        )
         assert rec["event_counting"]["n_min"] == N_MIN
         assert rec["cycle"]["signal_cycle"] == "12Z"
 

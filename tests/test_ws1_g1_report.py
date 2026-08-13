@@ -26,6 +26,11 @@ from pakhi.ws1.g1 import (
 )
 from pakhi.ws1.harness import run_harness
 
+pytestmark = pytest.mark.skipif(
+    not Path("data/ws0/freeze_pit.parquet").exists(),
+    reason="Real PIT data not found in CI environment",
+)
+
 HERE = Path(__file__).resolve().parent.parent
 
 

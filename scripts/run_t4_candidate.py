@@ -76,9 +76,11 @@ def main() -> None:
     print(f"mean gross           : {m['mean_gross'] * 100:+.4f}%")
     print(f"mean net (gross-30bp): {m['mean_net'] * 100:+.4f}%")
     print(f"mean net-of-benchmark: {m['mean_net_of_benchmark'] * 100:+.4f}%")
-    print(f"net-of-bench Sharpe  : {m['net_of_benchmark_sharpe']:.3f}  "
-          f"(95% CI {m['ci_95_net_of_benchmark_sharpe'][0]:.3f}, "
-          f"{m['ci_95_net_of_benchmark_sharpe'][1]:.3f})")
+    print(
+        f"net-of-bench Sharpe  : {m['net_of_benchmark_sharpe']:.3f}  "
+        f"(95% CI {m['ci_95_net_of_benchmark_sharpe'][0]:.3f}, "
+        f"{m['ci_95_net_of_benchmark_sharpe'][1]:.3f})"
+    )
 
     print("\n-- roll-jump armor (T4, contract 9.3, X = 5) --")
     print(

@@ -1,0 +1,20 @@
+[Unit]
+Description=Pakhi WS-2 daily orchestration: ingest->compute->store (T3)
+Documentation=docs/WS2_EXECUTION_BLUEPRINT.md
+After=network-online.target pakhi_timescaledb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Path to the Pakhi checkout on the host.
+WorkingDirectory=/home/pakhi/pakhi
+Environment=PYTHONUNBUFFERED=1
+# Optional alerting channels (see pakhi/ws2/alerts.py).
+#Environment=PAKHI_ALERT_WEBHOOK_URL=https://hooks.example.com/...
+#Environment=PAKHI_SMTP_HOST=smtp.example.com
+#Environment=PAKHI_ALERT_EMAIL=ops@example.com
+ExecStart=/usr/bin/python3 scripts/run_ws2_t3_orchestrate.py --db postgresql://postgres:postgres@localhost:5432/pakhi
+# The timer starts the 60-day paper-trading clock; a crash alerts (stderr is
+# captured by journald) and never silently drops a cycle.
+StandardOutput=journal
+StandardError=journal

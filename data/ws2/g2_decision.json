@@ -1,0 +1,50 @@
+{
+  "gate": "G2",
+  "instrument": "ColdGrip (OJ)",
+  "decision_utc": "2026-08-13T13:53:06.138788+00:00",
+  "outcome": "ZERO_TRADES",
+  "outcome_statement": "architecture success: live harness running, no scored events yet",
+  "decision_reason": "architecture success: fast, rigorous disproof -> documented pivot",
+  "headline_metric": {
+    "net_of_benchmark_event_sharpe": 0.0,
+    "ci_95_lower": 0.0,
+    "ci_95_upper": 0.0,
+    "bootstrap_pvalue_edge_gt_zero": 1.0,
+    "n_events": 0,
+    "power_class": "no trades",
+    "mean_net_of_benchmark": 0.0,
+    "classic_t": 0.0,
+    "newey_west_t": 0.0,
+    "newey_west_lag": 0
+  },
+  "metrics_crosscheck": {
+    "n_events": 0,
+    "net_of_benchmark_sharpe": 0.0
+  },
+  "live_ledger": {
+    "n_scored_events": 0,
+    "n_ledger_rows": 0,
+    "window_start": "2026-08-12 00:00:00",
+    "span_years": 0.0027378507871321013,
+    "rbar_recomputed": 0.002405491709799031,
+    "rbar_source": "locked_ws1_oos_fallback",
+    "n_min": 8
+  },
+  "g1_predecessor": {
+    "outcome": "UNDER_POWERED",
+    "n_events": 7,
+    "decision_json": "data/ws1/g1_decision.json"
+  },
+  "evidence_chain": {
+    "paper_trading_protocol": "docs/WS2_PAPER_TRADING_PROTOCOL.md",
+    "protocol_json": "data/ws2/paper_trading_protocol.json",
+    "execution_blueprint": "docs/WS2_EXECUTION_BLUEPRINT.md",
+    "decision_report": "docs/WS2_G2_REPORT.md"
+  },
+  "phase_3": {
+    "gated_on": "G1 re-run verdict (or explicit infra-first user decision)",
+    "api_scope": "deferred until PASS; an API serving an unproven edge is premature"
+  },
+  "note": "G2 is an infrastructure gate only: autonomous, no-lookahead, provenance-complete store feeding the paper ledger. It does not clear G1; verdicts follow the exact WS-1 significance rules on the live ledger.",
+  "payload_sha256": "5e52d2742a4951aa003bfcd421b43e1a512e22e5fb99724a8ddad842ec003c58"
+}

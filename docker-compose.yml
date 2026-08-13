@@ -44,6 +44,28 @@ services:
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
 
+  # ── WS-3 Public API (REST + WebSocket) ─────────────────────────────────
+  api:
+    build: .
+    image: pakhi:latest
+    container_name: pakhi-api
+    entrypoint: ["uvicorn", "pakhi.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - PAKHI_HOME=/home/pakhi
+      - PAKHI_DB_READ_URL=postgresql://postgres:postgres@db:5432/pakhi
+      - PAKHI_DB_WRITE_URL=postgresql://postgres:postgres@db:5432/pakhi
+      - PAKHI_LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   pakhi-data:
     driver: local

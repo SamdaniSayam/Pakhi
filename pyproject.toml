@@ -39,8 +39,13 @@ dependencies = [
     "rich>=13.0",
     "triples-sigfast>=2.2.0",
     "SQLAlchemy>=2.0",
-    "psycopg2-binary>=2.9",
 ]
+
+# NOTE: psycopg2-binary lives in the `postgres` extra, NOT in the base install
+# or `[all]`. Its bundled OpenLDAP (`libldap`) segfaults at interpreter exit on
+# modern glibc (Ubuntu 24.04 / Debian 13), which made every CI test job report
+# exit 139 despite all tests passing. CI tests install `.[all]` (no psycopg2);
+# the Postgres-backed production paths install `.[all,postgres]`.
 
 [project.optional-dependencies]
 ml = [
@@ -66,6 +71,19 @@ io = [
     "netCDF4>=1.6",
     "zarr>=2.14",
     "numba>=0.57",
+]
+postgres = [
+    "psycopg2-binary>=2.9",
+]
+# WS-3 API runtime. NOT in [all] so CI test installs stay lean and the
+# psycopg2/teardown class of issues is kept out of the base install (see the
+# NOTE above). Postgres-backed API deployments install ".[all,api,postgres]".
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.0",
+    "websockets>=12.0",
+    "httpx>=0.27",
 ]
 dev = [
     "pytest>=7.0",

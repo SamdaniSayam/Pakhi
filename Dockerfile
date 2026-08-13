@@ -30,9 +30,10 @@ RUN apt-get update && \
 
 WORKDIR /home/pakhi
 
-# Install pakhi from built wheel (no build tools in runtime)
+# Install pakhi from built wheel (no build tools in runtime). Postgres extra is
+# required here: the WS-2 orchestrate workers persist to the Postgres ledger.
 COPY --from=builder /wheels/*.whl /tmp/wheels/
-RUN pip install --no-cache-dir "$(ls /tmp/wheels/*.whl)[all]" && \
+RUN pip install --no-cache-dir "$(ls /tmp/wheels/*.whl)[all,postgres]" && \
     rm -rf /tmp/wheels
 
 # Pre-fetch Open-Meteo timezone data so first run is fast

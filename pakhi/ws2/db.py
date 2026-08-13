@@ -97,6 +97,18 @@ class Metric(Base):
     details = Column(JSON)
 
 
+class BacktestJob(Base):
+    __tablename__ = "backtest_jobs"
+
+    id = Column(String, primary_key=True)
+    status = Column(String, nullable=False, default="queued")  # queued | running | done | failed
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    params = Column(JSON, nullable=False)
+    result = Column(JSON, nullable=True)
+
+
 def get_engine(url: str = "postgresql://postgres:postgres@localhost:5432/pakhi"):
     return create_engine(url)
 

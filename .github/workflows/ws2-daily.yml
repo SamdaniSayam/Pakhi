@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e ".[all]"
+        run: pip install -e ".[all,postgres]"
       - name: Run daily ingest -> compute -> store
         run: python scripts/run_ws2_t3_orchestrate.py --db postgresql://postgres:postgres@localhost:5432/pakhi
         # Exit != 0 surfaces on the Actions board and can be webhook-alerted;

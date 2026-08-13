@@ -1,7 +1,7 @@
 {
   "gate": "G1",
   "instrument": "ColdGrip",
-  "decision_utc": "2026-08-13T13:54:05.629861+00:00",
+  "decision_utc": "2026-08-13T18:05:57.104817+00:00",
   "outcome": "UNDER_POWERED",
   "outcome_statement": "no conclusion; defers to Phase 2 live paper-trading to accumulate events",
   "decision_reason": "N=7 < N_min=8: no conclusion; G1 recorded UNDER-POWERED, freeze thesis defers to Phase 2 live paper-trading to accumulate events",
@@ -35,5 +35,5 @@
     "re_evaluation": "G1 re-run on the paper-trading event ledger; verdict updates on data"
   },
   "note": "Strictly OJ (NG, CME HDD/CDD, ensemble disagreement index deferred per Execution Blueprint \u00a74 T6). One-shot: the pre-registered ColdGrip candidate is scored exactly once against the locked contract; no re-tuning after any fold is scored.",
-  "payload_sha256": "cdf8a76dd7bce7189db6bec9be7b1f27b841867555efe265e898a84b8154649d"
+  "payload_sha256": "6a4703492c76f32beef3d0b7c8bc75e8e9605128c2180ad6f5323db9527b60ea"
 }

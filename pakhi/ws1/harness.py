@@ -202,6 +202,10 @@ def _cross_validate_engine(
     for _, ev in ledger.iterrows():
         if not ev["in_oos"]:
             continue
+        if pd.isna(ev["exit_session"]):
+            # Episode too close to the end of the session grid to have a
+            # locked 2-session hold; nothing to cross-validate against.
+            continue
         t = by_session.get(pd.Timestamp(ev["entry_session"]))
         if t is None:
             unmatched.append(str(ev["entry_cycle"].date()))

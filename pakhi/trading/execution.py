@@ -144,7 +144,11 @@ class PaperTrader:
 
         direction = TradeDirection.LONG if signal.action == Action.LONG else TradeDirection.SHORT
 
-        quantity = signal.size * self.cash / fill_price if fill_price > 0 else 0.0
+        # ``signal.size`` is a fraction of total portfolio equity, not of
+        # remaining cash: sizing off ``cash`` would underweight every trade
+        # after the first (cash only shrinks as positions open).
+        equity = self.get_equity({signal.instrument: current_price})
+        quantity = signal.size * equity / fill_price if fill_price > 0 else 0.0
         if quantity <= 0:
             logger.warning("Computed quantity is zero; skipping trade.")
             return Trade(

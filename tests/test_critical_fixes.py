@@ -173,8 +173,9 @@ class TestSPINoLeakage:
         # At index 50, the partial series has no future data,
         # but the full series does. If SPI uses future data, these would differ.
         # With rolling fit, they should be the same (both use only data up to t=50).
-        if not np.isnan(spi_partial[50]) and not np.isnan(spi_full[50]):
-            assert spi_partial[50] == pytest.approx(spi_full[50])
+        assert (np.isnan(spi_partial[50]) and np.isnan(spi_full[50])) or spi_partial[
+            50
+        ] == pytest.approx(spi_full[50])
 
     def test_spi_missing_data_returns_nan(self):
         """All-NaN windows should produce NaN, not 0.0."""
@@ -228,7 +229,6 @@ class TestAnomalyRolling:
 
         # Build on first 51 points (includes spike)
         result_51 = tf.build(ds.isel(time=slice(0, 51)), variables=["temp"])
-        result_51["temp_is_anomaly_24"].values[50]
 
         # Build on first 50 points (no spike yet)
         result_50 = tf.build(ds.isel(time=slice(0, 50)), variables=["temp"])

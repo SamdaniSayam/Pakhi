@@ -129,3 +129,40 @@ evidence, and the user is shown the running terminal live.
   WS-1 source, predecessor reads G1 record, gate verdict facts).
 - **Exit evidence:** contract doc + machine JSON approved and hash-pinned;
   gate verdict recorded above; `pakhi.api` imports cleanly.
+
+### 2026-08-14 — QC fix pass: end-to-end gaps closed (auth, NOTIFY push, honest backtest, per-key cap)
+- **Settings** (`pakhi/api/settings.py`) — `api_keys` now real: read from `PAKHI_API_KEYS`
+  env and/or `data/ws3/api_keys.json`; `from_env` plumbs it in. Keys gate auth + rate limit.
+- **Auth & rate limiting** (`pakhi/api/auth.py`, `pakhi/api/main.py`) — rewrote
+  `AuthAndRateLimitMiddleware`: enforces 401 (missing/wrong key), 429 (token-bucket
+  exhausted) with locked `{error:{code,message,details?}}` envelope + stamped
+  `X-Pakhi-Version`/`X-Request-ID`/`X-RateLimit-*` headers; OPTIONS preflight bypassed;
+  per-client identity by key hash or IP; thread-safe limiter reset per app startup.
+  Empirical proof of the old gap: no-key and bad-key both returned 200 with no
+  rate-limit headers.
+- **T4 WebSocket push wired** (`pakhi/api/broadcast.py`, `pakhi/ws2/orchestrate.py`) —
+  `NotifyListener` daemon thread LISTENs `cycle_complete` via psycopg2 (the installed
+  driver; the prior import was psycopg v3, not installed), re-reads the committed signal
+  rows through the read engine, and broadcasts the `signals.batch` payload to every
+  connected client in parallel. NOTIFY payload now carries `publication_ts` and is
+  single-quote-escaped for the SQL literal. No-op on sqlite.
+- **Backtest honesty** (`pakhi/api/jobs.py`) — backtest engine now replays the store's
+  REAL signal history on its real dates (`signal_source: "stored"`), filtered by
+  instrument/model/window, with the synthetic price proxy disclosed
+  (`price_source: "synthetic_proxy"`) and lookahead armor on (publications clipped to
+  the ICE OJ decision cutoff). No more fabricated all-FLAT runs on made-up 2023 bars;
+  empty windows report an honest "no stored signals" result, and non-finite metrics are
+  `null`, not `999`.
+- **Per-key queue cap** (`pakhi/api/routes/backtest.py`, `pakhi/ws2/db.py`) — the
+  contract's `{max_queued: 1, window_seconds: 300}` is now enforced per key
+  (`BacktestJob.client_id`, key-hash or IP), not globally; 2nd concurrent submit → 429
+  `rate_limited`, other keys unaffected.
+- **WebSocket auth** (`pakhi/api/routes/stream.py`) — WS now validates the SHA-256 key
+  hash against the configured allow-list and closes `1008` on bad/missing key when auth
+  is required (before the middleware would have allowed anonymous).
+- **Tests** — `tests/test_ws3_auth_limiter.py` rewritten to exercise the real settings
+  path (401 for missing/wrong key, 200 for valid, 429 on exhaustion, headers present);
+  added `test_backtest_replays_stored_signals`, `test_backtest_honest_when_no_signals`,
+  `test_per_key_queue_cap` (`test_ws3_jobs.py`) and
+  `test_websocket_rejects_invalid_or_missing_key` (`test_ws3_websocket.py`).
+- **Full suite:** **1,776 passed, 5 skipped, 0 failed** (WS-3 subset 68/68). ruff check clean.

@@ -107,6 +107,10 @@ class BacktestJob(Base):
     finished_at = Column(DateTime(timezone=True), nullable=True)
     params = Column(JSON, nullable=False)
     result = Column(JSON, nullable=True)
+    # WS-3 per-key queue cap: caller identity (API-key hash prefix or client IP)
+    # recorded so the 1-queued/5-min contract cap is enforced per client, not
+    # globally. Nullable for back-compat with rows created before the column.
+    client_id = Column(String, nullable=True, index=True)
 
 
 def get_engine(url: str = "postgresql://postgres:postgres@localhost:5432/pakhi"):

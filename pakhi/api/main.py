@@ -19,7 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pakhi.api import errors
-from pakhi.api.auth import AuthAndRateLimitMiddleware
+from pakhi.api.auth import AuthAndRateLimitMiddleware, hash_key, rate_limiter
 from pakhi.api.broadcast import start_notify_listener
 from pakhi.api.db import build_engine
 from pakhi.api.logcfg import RequestContextMiddleware, setup_logging
@@ -34,14 +34,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings if settings is not None else Settings.from_env()
     setup_logging(settings.log_level)
 
+    allowed_hashes = {hash_key(k) for k in settings.api_keys}
+    require_auth = bool(allowed_hashes)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.read_engine = build_engine(settings.read_db_url, read_only=True)
         app.state.write_engine = build_engine(settings.write_db_url)
 
-        # Start Postgres NOTIFY cycle_complete listener task
+        # Start fresh bucket per app lifecycle (deterministic tests, clean boot).
+        rate_limiter.reset()
+        app.state.api_key_hashes = allowed_hashes
+        app.state.require_auth = require_auth
+
+        # Start Postgres NOTIFY cycle_complete listener task (no-op on sqlite).
         stop_event = asyncio.Event()
-        listener_task = asyncio.create_task(start_notify_listener(settings.read_db_url, stop_event))
+        listener_task = asyncio.create_task(
+            start_notify_listener(settings.read_db_url, app.state.read_engine, stop_event)
+        )
 
         yield
 
@@ -69,9 +79,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             max_age=600,
         )
 
-    # Middleware execution order: RequestContextMiddleware (outer) -> AuthAndRateLimitMiddleware -> App
+    # Middleware execution order (last added = outermost):
+    #   AuthAndRateLimitMiddleware -> RequestContextMiddleware -> CORS -> app
+    # Auth runs first so unknown keys / over-limit requests never reach the app,
+    # but preflight OPTIONS are passed straight through (never rejected).
     app.add_middleware(RequestContextMiddleware)
-    app.add_middleware(AuthAndRateLimitMiddleware)
+    app.add_middleware(
+        AuthAndRateLimitMiddleware,
+        allowed_keys=allowed_hashes,
+        require_auth=require_auth,
+    )
 
     app.add_exception_handler(RequestValidationError, errors.request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, errors.http_exception_handler)

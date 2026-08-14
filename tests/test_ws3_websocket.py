@@ -94,3 +94,41 @@ def test_websocket_multiple_clients_fanout(api_client):
         assert msg2["cycle_id"] == "20260813_18z"
 
     assert broadcaster.active_count == 0
+
+
+def test_websocket_rejects_invalid_or_missing_key(tmp_path):
+    from starlette.websockets import WebSocketDisconnect
+
+    read_db = tmp_path / "read.db"
+    write_db = tmp_path / "write.db"
+    seed_store(f"sqlite:///{read_db}")
+    seed_store(f"sqlite:///{write_db}")
+
+    app = create_app(
+        Settings(
+            read_db_url=f"sqlite:///{read_db}",
+            write_db_url=f"sqlite:///{write_db}",
+            api_keys=("good_key",),
+        )
+    )
+    with TestClient(app) as client:
+        assert app.state.require_auth is True
+
+        # Wrong key -> rejected before accept (close code 1008).
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect(
+            "/v1/stream/signals", headers={"X-Pakhi-Key": "bad_key"}
+        ):
+            pass
+        assert broadcaster.active_count == 0
+
+        # Missing key -> rejected.
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/v1/stream/signals"):
+            pass
+        assert broadcaster.active_count == 0
+
+        # Valid key -> connects.
+        with client.websocket_connect(
+            "/v1/stream/signals", headers={"X-Pakhi-Key": "good_key"}
+        ):
+            assert broadcaster.active_count == 1
+    assert broadcaster.active_count == 0

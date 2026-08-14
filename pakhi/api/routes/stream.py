@@ -12,6 +12,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from pakhi.api.auth import hash_key
 from pakhi.api.broadcast import broadcaster
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,13 @@ router = APIRouter(prefix="/v1", tags=["stream"])
 @router.websocket("/stream/signals")
 async def stream_signals(websocket: WebSocket):
     """Live WebSocket stream for signal batches."""
+    # HTTP middleware does not wrap WebSocket routes, so the same key policy as
+    # AuthAndRateLimitMiddleware is enforced here (presence + valid hash).
+    require_auth = getattr(websocket.app.state, "require_auth", False)
+    allowed_hashes = getattr(websocket.app.state, "api_key_hashes", set()) or set()
     key_header = websocket.headers.get("X-Pakhi-Key") or websocket.query_params.get("key")
-    settings = getattr(websocket.app.state, "settings", None)
-    if settings and getattr(settings, "require_auth", False) and not key_header:
-        await websocket.close(code=1008, reason="missing required X-Pakhi-Key")
+    if require_auth and (not key_header or hash_key(key_header) not in allowed_hashes):
+        await websocket.close(code=1008, reason="unauthorized: invalid or missing X-Pakhi-Key")
         return
 
     await broadcaster.connect(websocket)

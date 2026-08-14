@@ -206,11 +206,14 @@ def orchestrate_cycle(
                 payload = json.dumps(
                     {
                         "cycle_id": ingested["forecast_cycle_id"],
-                        "publication_ts": datetime.now(timezone.utc).isoformat(),
+                        "publication_ts": ingested.get("publication_ts")
+                        or datetime.now(timezone.utc).isoformat(),
                     }
                 )
+                # NOTIFY takes a string literal (no bind params); escape quotes.
+                escaped = payload.replace("'", "''")
                 with engine.begin() as conn:
-                    conn.execute(text(f"NOTIFY cycle_complete, '{payload}'"))
+                    conn.execute(text(f"NOTIFY cycle_complete, '{escaped}'"))
             except Exception as exc:
                 logger.warning("NOTIFY cycle_complete failed: %s", exc)
 

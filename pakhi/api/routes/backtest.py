@@ -10,6 +10,7 @@ GET /v1/backtests/{job_id}/result — retrieves stored job result artifact when 
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -24,35 +25,44 @@ from pakhi.ws2.db import BacktestJob
 
 router = APIRouter(prefix="/v1", tags=["backtests"])
 
+# Locked per_key_cap (contract §backtest_bounds): max 1 queued job per client
+# in any 300s window.
+_MAX_QUEUED_PER_CLIENT = 1
+_CAP_WINDOW_SECONDS = 300
+
+
+def _client_id(request: Request) -> str:
+    key_header = request.headers.get("X-Pakhi-Key") or request.query_params.get("key")
+    if key_header:
+        return f"key_{hash_key(key_header)[:12]}"
+    return request.client.host if request.client else "127.0.0.1"
+
 
 @router.post("/backtests", status_code=201)
 def submit_backtest(request: Request, body: dict[str, Any], background_tasks: BackgroundTasks):
     """Enqueue a backtest-as-a-service job. Returns 201 Created."""
     write_engine = request.app.state.write_engine
     read_engine = request.app.state.read_engine
+    client_id = _client_id(request)
+    cap_since = datetime.now(timezone.utc) - timedelta(seconds=_CAP_WINDOW_SECONDS)
 
-    key_header = request.headers.get("X-Pakhi-Key") or request.query_params.get("key")
-    _client_id = (
-        hash_key(key_header)
-        if key_header
-        else (request.client.host if request.client else "127.0.0.1")
-    )
-
-    # Enforce contract per_key_cap: max 1 queued job per client
+    # Enforce contract per_key_cap: max 1 queued job per client per 300s window.
     with Session(write_engine) as session:
         queued_count = (
             session.execute(
-                select(func.count()).select_from(BacktestJob).where(BacktestJob.status == "queued")
+                select(func.count())
+                .select_from(BacktestJob)
+                .where(BacktestJob.status == "queued")
+                .where(BacktestJob.client_id == client_id)
+                .where(BacktestJob.created_at >= cap_since)
             ).scalar()
             or 0
         )
-        if queued_count >= 1:
-            raise HTTPException(
-                status_code=429, detail="a backtest job is already queued for this client"
-            )
+        if queued_count >= _MAX_QUEUED_PER_CLIENT:
+            raise HTTPException(status_code=429, detail="a backtest job is already queued for this client")
 
     try:
-        job_info = create_backtest_job(write_engine, body)
+        job_info = create_backtest_job(write_engine, body, client_id=client_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 

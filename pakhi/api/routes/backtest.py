@@ -59,7 +59,9 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
             or 0
         )
         if queued_count >= _MAX_QUEUED_PER_CLIENT:
-            raise HTTPException(status_code=429, detail="a backtest job is already queued for this client")
+            raise HTTPException(
+                status_code=429, detail="a backtest job is already queued for this client"
+            )
 
     try:
         job_info = create_backtest_job(write_engine, body, client_id=client_id)

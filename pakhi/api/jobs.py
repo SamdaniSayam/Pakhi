@@ -230,7 +230,9 @@ def run_single_backtest(params: dict[str, Any], engine=None) -> dict[str, Any]:
         "metrics": metrics,
         "total_trades": len(res.trades),
         "initial_capital": initial_capital,
-        "final_equity": float(res.equity_curve[-1]) if len(res.equity_curve) > 0 else initial_capital,
+        "final_equity": float(res.equity_curve[-1])
+        if len(res.equity_curve) > 0
+        else initial_capital,
         "signal_source": "stored",
         "price_source": "synthetic_proxy",
         "note": "fills simulated on a synthetic price proxy; real OHLCV not yet stored",

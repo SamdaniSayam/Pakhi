@@ -115,8 +115,9 @@ def test_websocket_rejects_invalid_or_missing_key(tmp_path):
         assert app.state.require_auth is True
 
         # Wrong key -> rejected before accept (close code 1008).
-        with pytest.raises(WebSocketDisconnect), client.websocket_connect(
-            "/v1/stream/signals", headers={"X-Pakhi-Key": "bad_key"}
+        with (
+            pytest.raises(WebSocketDisconnect),
+            client.websocket_connect("/v1/stream/signals", headers={"X-Pakhi-Key": "bad_key"}),
         ):
             pass
         assert broadcaster.active_count == 0
@@ -127,8 +128,6 @@ def test_websocket_rejects_invalid_or_missing_key(tmp_path):
         assert broadcaster.active_count == 0
 
         # Valid key -> connects.
-        with client.websocket_connect(
-            "/v1/stream/signals", headers={"X-Pakhi-Key": "good_key"}
-        ):
+        with client.websocket_connect("/v1/stream/signals", headers={"X-Pakhi-Key": "good_key"}):
             assert broadcaster.active_count == 1
     assert broadcaster.active_count == 0

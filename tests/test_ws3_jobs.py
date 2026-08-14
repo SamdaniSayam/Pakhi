@@ -135,7 +135,9 @@ def test_backtest_replays_stored_signals(tmp_path):
     seed_store(f"sqlite:///{read_db}", signals=signals)
     seed_store(f"sqlite:///{write_db}")
 
-    app = create_app(Settings(read_db_url=f"sqlite:///{read_db}", write_db_url=f"sqlite:///{write_db}"))
+    app = create_app(
+        Settings(read_db_url=f"sqlite:///{read_db}", write_db_url=f"sqlite:///{write_db}")
+    )
     with TestClient(app) as client:
         created = client.post("/v1/backtests", json={"window_days": 60}).json()
         job_id = created["job_id"]
@@ -154,7 +156,9 @@ def test_backtest_honest_when_no_signals(tmp_path):
     seed_store(f"sqlite:///{read_db}")
     seed_store(f"sqlite:///{write_db}")
 
-    app = create_app(Settings(read_db_url=f"sqlite:///{read_db}", write_db_url=f"sqlite:///{write_db}"))
+    app = create_app(
+        Settings(read_db_url=f"sqlite:///{read_db}", write_db_url=f"sqlite:///{write_db}")
+    )
     with TestClient(app) as client:
         created = client.post("/v1/backtests", json={"window_days": 30}).json()
         execute_job_by_id(app.state.write_engine, created["job_id"])

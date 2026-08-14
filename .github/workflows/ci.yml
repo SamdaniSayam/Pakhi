@@ -43,7 +43,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libopenblas-dev libgfortran5
       - name: Install pakhi
-        run: pip install -e ".[all]"
+        # The WS-3 API test suite needs the `api` extra (fastapi/httpx/websockets),
+        # which is intentionally not in `[all]`; install it for the test job.
+        run: pip install -e ".[all,api]"
       - name: Run tests
         run: pytest tests/ -v --tb=short --cov=pakhi --cov-report=xml
       - name: Upload coverage

@@ -138,9 +138,7 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         if key_header:
             hashed = hash_key(key_header)
             if self.allowed_keys and hashed not in self.allowed_keys:
-                return self._auth_error(
-                    request, 401, "unauthorized", "invalid API key"
-                )
+                return self._auth_error(request, 401, "unauthorized", "invalid API key")
             client = f"key_{hashed[:12]}"
         elif self.require_auth:
             return self._auth_error(

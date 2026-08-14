@@ -6,6 +6,8 @@ Manages connected WebSocket clients for ``WS /v1/stream/signals`` and fans out
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import Any
 
@@ -34,28 +36,75 @@ class SignalBroadcaster:
         )
 
     async def broadcast(self, payload: dict[str, Any]) -> int:
-        """Fan out a JSON payload to all connected clients. Returns count of successful sends."""
-        if not self._active_connections:
+        """Fan out a JSON payload to all connected clients in parallel (no head-of-line blocking)."""
+        connections = list(self._active_connections)
+        if not connections:
             return 0
 
-        stale: list[WebSocket] = []
-        sent_count = 0
-        for connection in list(self._active_connections):
+        async def _send(ws: WebSocket) -> bool:
             try:
-                await connection.send_json(payload)
-                sent_count += 1
+                await ws.send_json(payload)
+                return True
             except Exception:
-                stale.append(connection)
+                self.disconnect(ws)
+                return False
 
-        for connection in stale:
-            self.disconnect(connection)
-
-        return sent_count
+        results = await asyncio.gather(*[_send(ws) for ws in connections], return_exceptions=True)
+        return sum(1 for r in results if r is True)
 
     @property
     def active_count(self) -> int:
         return len(self._active_connections)
 
 
-# Global broadcaster instance attached to app state or module
+# Global broadcaster instance attached to app state
 broadcaster = SignalBroadcaster()
+
+
+def make_signals_batch_payload(
+    cycle_id: str,
+    publication_ts: str,
+    signals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Format payload according to locked signals.batch schema (Contract §4)."""
+    return {
+        "type": "signals.batch",
+        "version": "1",
+        "cycle_id": cycle_id,
+        "publication_ts": publication_ts,
+        "signals": signals,
+    }
+
+
+async def start_notify_listener(db_url: str, stop_event: asyncio.Event) -> None:
+    """Background task listening for Postgres NOTIFY cycle_complete events or local events."""
+    if not db_url.startswith("postgresql"):
+        # SQLite / in-memory store in local dev & tests
+        while not stop_event.is_set():
+            await asyncio.sleep(1.0)
+        return
+
+    # Postgres listener loop
+    while not stop_event.is_set():
+        try:
+            import psycopg
+
+            conn = await psycopg.AsyncConnection.connect(db_url, autocommit=True)
+            async with conn:
+                await conn.execute("LISTEN cycle_complete;")
+                gen = conn.notifies()
+                while not stop_event.is_set():
+                    try:
+                        notify = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
+                        data = json.loads(notify.payload)
+                        payload = make_signals_batch_payload(
+                            cycle_id=data.get("cycle_id", ""),
+                            publication_ts=data.get("publication_ts", ""),
+                            signals=data.get("signals", []),
+                        )
+                        await broadcaster.broadcast(payload)
+                    except (TimeoutError, asyncio.TimeoutError):
+                        continue
+        except Exception as exc:
+            logger.warning("Postgres NOTIFY listener reconnecting: %s", exc)
+            await asyncio.sleep(2.0)

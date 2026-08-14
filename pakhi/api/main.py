@@ -11,6 +11,7 @@ WebSocket endpoints are ``async def``.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -18,6 +19,8 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pakhi.api import errors
+from pakhi.api.auth import AuthAndRateLimitMiddleware
+from pakhi.api.broadcast import start_notify_listener
 from pakhi.api.db import build_engine
 from pakhi.api.logcfg import RequestContextMiddleware, setup_logging
 from pakhi.api.routes.backtest import router as backtest_router
@@ -35,7 +38,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.read_engine = build_engine(settings.read_db_url, read_only=True)
         app.state.write_engine = build_engine(settings.write_db_url)
+
+        # Start Postgres NOTIFY cycle_complete listener task
+        stop_event = asyncio.Event()
+        listener_task = asyncio.create_task(start_notify_listener(settings.read_db_url, stop_event))
+
         yield
+
+        stop_event.set()
+        listener_task.cancel()
         app.state.read_engine.dispose()
         app.state.write_engine.dispose()
 
@@ -57,10 +68,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_credentials=False,
             max_age=600,
         )
-    # RequestContextMiddleware added last so it sits outside CORS and stamps
-    # X-Pakhi-Version / X-Request-ID + the access line on every response,
-    # including CORS-preflight short-circuits.
+
+    # Middleware execution order: RequestContextMiddleware (outer) -> AuthAndRateLimitMiddleware -> App
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(AuthAndRateLimitMiddleware)
 
     app.add_exception_handler(RequestValidationError, errors.request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, errors.http_exception_handler)

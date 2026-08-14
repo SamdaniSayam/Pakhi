@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from pakhi.api.contract import BACKTEST_BOUNDS, LIVE_INSTRUMENT
 from pakhi.risk.backtest import BacktestEngine
 from pakhi.signals.base import Action, Signal
 from pakhi.ws2.db import BacktestJob
+from pakhi.ws2.db import Signal as DBSignal
 
 
 def validate_backtest_params(params: dict[str, Any]) -> dict[str, Any]:
@@ -85,34 +87,55 @@ def create_backtest_job(write_engine, params: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "job_id": job_id,
+        "id": job_id,
         "status": "queued",
         "created_at": now.isoformat(),
         "status_url": f"/v1/backtests/{job_id}",
     }
 
 
-def run_single_backtest(params: dict[str, Any]) -> dict[str, Any]:
-    """Execute backtest engine for given parameters and return result payload."""
+def run_single_backtest(params: dict[str, Any], engine=None) -> dict[str, Any]:
+    """Execute backtest engine over stored signal history with lookahead_armor=True."""
     window_days = params["window_days"]
     initial_capital = params["initial_capital"]
     commission_bps = params["commission_bps"]
     slippage_bps = params["slippage_bps"]
     instrument = params["instrument"]
 
-    # Generate synthetic price series for testing/service backtest runs
+    stored_signals: dict[str, DBSignal] = {}
+    if engine is not None:
+        with Session(engine) as session:
+            rows = session.scalars(
+                select(DBSignal)
+                .where(DBSignal.instrument == instrument)
+                .order_by(DBSignal.timestamp)
+            ).all()
+            for r in rows:
+                if r.timestamp:
+                    stored_signals[r.timestamp.strftime("%Y-%m-%d")] = r
+
     dates = pd.date_range("2023-01-01", periods=max(window_days, 10), freq="B")
-    prices = [100.0 + i * 0.5 for i in range(len(dates))]
+    prices = [100.0 + (i % 7 - 3) * 0.25 for i in range(len(dates))]
     data = pd.DataFrame({"close": prices}, index=dates)
 
     def gen_signal(df: pd.DataFrame, idx: int) -> Signal:
-        if idx % 5 == 0:
+        dt_str = df.index[idx].strftime("%Y-%m-%d")
+        if dt_str in stored_signals:
+            db_s = stored_signals[dt_str]
+            act = (
+                Action.LONG
+                if db_s.action == "LONG"
+                else Action.SHORT
+                if db_s.action == "SHORT"
+                else Action.FLAT
+            )
             return Signal(
-                action=Action.LONG,
-                size=0.5,
-                confidence=0.8,
+                action=act,
+                size=db_s.size,
+                confidence=db_s.confidence,
                 instrument=instrument,
                 timestamp=df.index[idx],
-                reasoning="service backtest signal",
+                reasoning=db_s.reasoning or "stored signal",
             )
         return Signal(
             action=Action.FLAT,
@@ -123,24 +146,25 @@ def run_single_backtest(params: dict[str, Any]) -> dict[str, Any]:
             reasoning="flat",
         )
 
-    engine = BacktestEngine()
-    res = engine.run(
+    backtest = BacktestEngine()
+    res = backtest.run(
         gen_signal,
         data,
         initial_capital=initial_capital,
         commission_bps=commission_bps,
         slippage_bps=slippage_bps,
         instrument=instrument,
-        lookahead_armor=False,
+        lookahead_armor=True,
     )
+
+    pf = float(res.profit_factor)
+    pf_clean = round(pf, 4) if np.isfinite(pf) else None
 
     metrics = {
         "sharpe": round(float(res.sharpe), 4),
         "max_drawdown": round(float(res.max_drawdown), 4),
         "win_rate": round(float(res.win_rate), 4),
-        "profit_factor": round(float(res.profit_factor), 4)
-        if not (res.profit_factor != res.profit_factor or res.profit_factor == float("inf"))
-        else 999.0,
+        "profit_factor": pf_clean,
         "total_return": round(float(res.total_return), 4),
     }
 
@@ -154,7 +178,7 @@ def run_single_backtest(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def execute_job_by_id(write_engine, job_id: str) -> bool:
+def execute_job_by_id(write_engine, job_id: str, read_engine=None) -> bool:
     """Execute a single queued job by ID, transitioning queued -> running -> done/failed."""
     now = datetime.now(timezone.utc)
     with Session(write_engine) as session:
@@ -169,7 +193,7 @@ def execute_job_by_id(write_engine, job_id: str) -> bool:
         with Session(write_engine) as session:
             job = session.get(BacktestJob, job_id)
             params = job.params
-            res = run_single_backtest(params)
+            res = run_single_backtest(params, engine=read_engine or write_engine)
 
             job.status = "done"
             job.finished_at = datetime.now(timezone.utc)
@@ -186,7 +210,7 @@ def execute_job_by_id(write_engine, job_id: str) -> bool:
         return False
 
 
-def process_pending_jobs(write_engine) -> int:
+def process_pending_jobs(write_engine, read_engine=None) -> int:
     """Process all currently queued backtest jobs. Returns number of jobs processed."""
     with Session(write_engine) as session:
         jobs = session.scalars(
@@ -198,6 +222,6 @@ def process_pending_jobs(write_engine) -> int:
 
     count = 0
     for j_id in job_ids:
-        if execute_job_by_id(write_engine, j_id):
+        if execute_job_by_id(write_engine, j_id, read_engine=read_engine):
             count += 1
     return count

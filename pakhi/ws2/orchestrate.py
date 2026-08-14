@@ -198,6 +198,22 @@ def orchestrate_cycle(
         record["decision"] = result["decision"]
         record["ledger_row"] = result["ledger_row"]
 
+        # Issue Postgres NOTIFY cycle_complete after compute & ledger write commit
+        if engine is not None and getattr(engine.dialect, "name", "") == "postgresql":
+            from sqlalchemy import text
+
+            try:
+                payload = json.dumps(
+                    {
+                        "cycle_id": ingested["forecast_cycle_id"],
+                        "publication_ts": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                with engine.begin() as conn:
+                    conn.execute(text(f"NOTIFY cycle_complete, '{payload}'"))
+            except Exception as exc:
+                logger.warning("NOTIFY cycle_complete failed: %s", exc)
+
     record["status"] = CycleOutcome.OK
     structured_log(record, log_sink)
     return record

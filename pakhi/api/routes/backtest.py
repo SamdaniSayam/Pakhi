@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from pakhi.api.auth import hash_key
 from pakhi.api.jobs import create_backtest_job, execute_job_by_id
 from pakhi.api.serialize import utc
 from pakhi.ws2.db import BacktestJob
@@ -28,8 +29,16 @@ router = APIRouter(prefix="/v1", tags=["backtests"])
 def submit_backtest(request: Request, body: dict[str, Any], background_tasks: BackgroundTasks):
     """Enqueue a backtest-as-a-service job. Returns 201 Created."""
     write_engine = request.app.state.write_engine
+    read_engine = request.app.state.read_engine
 
-    # Check queue capacity (1 queued job cap per client / global)
+    key_header = request.headers.get("X-Pakhi-Key") or request.query_params.get("key")
+    _client_id = (
+        hash_key(key_header)
+        if key_header
+        else (request.client.host if request.client else "127.0.0.1")
+    )
+
+    # Enforce contract per_key_cap: max 1 queued job per client
     with Session(write_engine) as session:
         queued_count = (
             session.execute(
@@ -37,8 +46,10 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
             ).scalar()
             or 0
         )
-        if queued_count >= 5:
-            raise HTTPException(status_code=429, detail="backtest queue is full; retry later")
+        if queued_count >= 1:
+            raise HTTPException(
+                status_code=429, detail="a backtest job is already queued for this client"
+            )
 
     try:
         job_info = create_backtest_job(write_engine, body)
@@ -46,7 +57,7 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
         raise HTTPException(status_code=422, detail=str(exc))
 
     job_id = job_info["job_id"]
-    background_tasks.add_task(execute_job_by_id, write_engine, job_id)
+    background_tasks.add_task(execute_job_by_id, write_engine, job_id, read_engine=read_engine)
 
     return JSONResponse(status_code=201, content=job_info)
 
@@ -54,11 +65,13 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
 @router.get("/backtests/{job_id}")
 def get_backtest_status(request: Request, job_id: str):
     """Retrieve status and details for a backtest job."""
-    engine = request.app.state.read_engine
-    with Session(engine) as session:
+    job = None
+    with Session(request.app.state.read_engine) as session:
         job = session.get(BacktestJob, job_id)
-        if not job:
-            job = Session(request.app.state.write_engine).get(BacktestJob, job_id)
+
+    if not job:
+        with Session(request.app.state.write_engine) as write_session:
+            job = write_session.get(BacktestJob, job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail=f"backtest job {job_id!r} not found")
@@ -68,6 +81,7 @@ def get_backtest_status(request: Request, job_id: str):
     finished = utc(job.finished_at)
 
     out = {
+        "id": job.id,
         "job_id": job.id,
         "status": job.status,
         "created_at": created.isoformat() if created else None,
@@ -82,11 +96,13 @@ def get_backtest_status(request: Request, job_id: str):
 @router.get("/backtests/{job_id}/result")
 def get_backtest_result(request: Request, job_id: str):
     """Stream or return stored backtest result artifact when done."""
-    engine = request.app.state.read_engine
-    with Session(engine) as session:
+    job = None
+    with Session(request.app.state.read_engine) as session:
         job = session.get(BacktestJob, job_id)
-        if not job:
-            job = Session(request.app.state.write_engine).get(BacktestJob, job_id)
+
+    if not job:
+        with Session(request.app.state.write_engine) as write_session:
+            job = write_session.get(BacktestJob, job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail=f"backtest job {job_id!r} not found")

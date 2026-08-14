@@ -30,10 +30,10 @@ RUN apt-get update && \
 
 WORKDIR /home/pakhi
 
-# Install pakhi from built wheel (no build tools in runtime). Postgres extra is
-# required here: the WS-2 orchestrate workers persist to the Postgres ledger.
+# Install pakhi from built wheel (no build tools in runtime). Postgres and API extras are
+# required here so both CLI workers and WS-3 uvicorn API can run.
 COPY --from=builder /wheels/*.whl /tmp/wheels/
-RUN pip install --no-cache-dir "$(ls /tmp/wheels/*.whl)[all,postgres]" && \
+RUN pip install --no-cache-dir "$(ls /tmp/wheels/*.whl)[all,api,postgres]" && \
     rm -rf /tmp/wheels
 
 # Pre-fetch Open-Meteo timezone data so first run is fast
@@ -43,9 +43,9 @@ RUN python -c "import zoneinfo; zoneinfo.ZoneInfo('UTC')" 2>/dev/null || true
 COPY examples/ /home/pakhi/examples/
 COPY data/README.md /home/pakhi/data/README.md
 
-# Health check — verify CLI is functional
+# Health check — verify CLI or API endpoint is functional
 HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
-    CMD ["pakhi", "--version"]
+    CMD curl -f http://localhost:8000/v1/health || pakhi --version
 
 # Run as non-root
 USER pakhi

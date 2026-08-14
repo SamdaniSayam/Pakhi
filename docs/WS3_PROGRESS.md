@@ -44,7 +44,7 @@ evidence, and the user is shown the running terminal live.
   - `create_backtest_job`: Generates unique ID `bt_{uuid4}` and inserts row via `write_engine`.
   - `execute_job_by_id` & `process_pending_jobs`: Executes `BacktestEngine` in background worker tasks, updates status `queued -> running -> done/failed`, records metrics without blocking API threads.
 - **`pakhi/api/routes/backtest.py`** — Route handlers:
-  - `POST /v1/backtests`: Enqueues job via `write_engine`, adds background execution task, returns 202 Accepted. Over-bounds params raise 422 with locked error envelope.
+  - `POST /v1/backtests`: Enqueues job via `write_engine`, adds background execution task, returns 201 Created. Over-bounds params raise 422 with locked error envelope.
   - `GET /v1/backtests/{job_id}`: Retrieves status & results via `read_engine` (with `write_engine` fallback). Missing job raises 404.
 - **Tests `tests/test_ws3_jobs.py`** (6 tests): Enqueue 202, 422 parameter validation, 404 missing status, full status transition `queued -> done`, and background batch queue processing.
 - **Exit evidence:** 53/53 WS-3 suite tests green, ruff check & ruff format clean.

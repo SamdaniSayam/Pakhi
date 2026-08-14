@@ -22,6 +22,12 @@ router = APIRouter(prefix="/v1", tags=["stream"])
 @router.websocket("/stream/signals")
 async def stream_signals(websocket: WebSocket):
     """Live WebSocket stream for signal batches."""
+    key_header = websocket.headers.get("X-Pakhi-Key") or websocket.query_params.get("key")
+    settings = getattr(websocket.app.state, "settings", None)
+    if settings and getattr(settings, "require_auth", False) and not key_header:
+        await websocket.close(code=1008, reason="missing required X-Pakhi-Key")
+        return
+
     await broadcaster.connect(websocket)
     try:
         while True:

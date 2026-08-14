@@ -113,9 +113,9 @@ class PakhiClient:
             params["cycle_id"] = cycle_id
         return self._get(f"/v1/signals/{instrument}", params=params)
 
-    def forecasts(self, instrument: str) -> dict[str, Any]:
+    def forecasts(self, instrument: str, lead: str = "7d") -> dict[str, Any]:
         """Retrieve stored forecast rows (GET /v1/forecasts/{instrument})."""
-        return self._get(f"/v1/forecasts/{instrument}")
+        return self._get(f"/v1/forecasts/{instrument}", params={"lead": lead})
 
     def ensemble_disagreement(self) -> dict[str, Any]:
         """Retrieve stored ensemble disagreement series (GET /v1/ensemble/disagreement)."""
@@ -133,27 +133,27 @@ class PakhiClient:
             self.base_url.replace("http://", "ws://").replace("https://", "wss://")
             + "/v1/stream/signals"
         )
-        # Light mock or websockets connection runner
         try:
             import asyncio
             import json as _json
 
             import websockets
+        except ImportError as exc:
+            raise ImportError(
+                "The 'websockets' library is required to stream signals using PakhiClient.stream_signals()."
+            ) from exc
 
-            async def _listen():
-                async with websockets.connect(ws_url) as ws:
-                    count = 0
-                    while count < max_messages:
-                        msg = await ws.recv()
-                        data = _json.loads(msg)
-                        if data.get("type") == "signals.batch":
-                            on_signal(data)
-                            count += 1
+        async def _listen():
+            async with websockets.connect(ws_url) as ws:
+                count = 0
+                while count < max_messages:
+                    msg = await ws.recv()
+                    data = _json.loads(msg)
+                    if data.get("type") == "signals.batch":
+                        on_signal(data)
+                        count += 1
 
-            asyncio.run(_listen())
-        except ImportError:
-            # Fallback when websockets client library is not installed
-            pass
+        asyncio.run(_listen())
 
     def close(self) -> None:
         """Close the underlying HTTP client session."""

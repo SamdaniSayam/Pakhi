@@ -1,0 +1,137 @@
+name: WS-5 DR Drill
+
+# WS-5 T5: the wipe-and-restore drill against a REAL Postgres 16 service
+# container — the executable, rehearsed version of the backup-policy's
+# "tested-restore" clause (backup-policy §4/§5: a restore that has never been
+# executed is a wish, not a backup).
+#
+# Steps: seed a store with a published cycle + ledger + sealed audit chain,
+# take a base snapshot (pg_dump -Fc) + off-host copy, then run
+# run_ws5_restore_drill.py: snapshot -> wipe a scratch DB -> restore ->
+# verify_chain -> verify_ledger -> verify WS-3 reads + the WS-4 evidence suite
+# against the restored DB. RPO (<= dr.rpo_cycles) and RTO (<= dr.rto_hours) are
+# read from the contract twin and reported by the drill.
+#
+# psycopg v3 is used (psycopg2 segfaults at interpreter exit; see
+# pyproject.toml NOTE and ws4-security.yml). postgresql-client provides
+# pg_dump/pg_restore on the runner for the postgres dialect of the scripts.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ws5-dr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WS5_SOURCE_URL: postgresql+psycopg://pakhi:pakhi@localhost:5432/pakhi_test
+  WS5_SCRATCH_URL: postgresql+psycopg://pakhi:pakhi@localhost:5432/pakhi_drill
+  BACKUP_DIR: /tmp/ws5-backup
+  OFFHOST_DIR: /tmp/ws5-offhost
+
+jobs:
+  ws5-dr:
+    name: WS-5 restore drill (Postgres 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pakhi
+          POSTGRES_PASSWORD: pakhi
+          POSTGRES_DB: pakhi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pakhi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pakhi + drivers + postgresql-client
+        run: |
+          pip install -e ".[all,api,redis,obs]" "psycopg[binary]>=3.1"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Seed a store with a published cycle + ledger + audit chain
+        # Mirrors the hermetic seed in tests/test_ws5_t5_dr.py: a cycle, a
+        # paper-ledger row, a tenant, and a sealed audit chain the drill must
+        # restore and re-verify.
+        run: |
+          set -euo pipefail
+          python - <<'EOF'
+          import os
+          from datetime import datetime, timezone
+          from sqlalchemy import create_engine
+          from sqlalchemy.orm import Session
+
+          from pakhi.ws2.db import ForecastCycle, PaperLedger, Signal, init_db, upsert
+          from pakhi.ws4.audit_events import AuditSpec, apply_audit
+          from pakhi.ws4.service import upsert_tenant
+
+          eng = create_engine(os.environ["WS5_SOURCE_URL"])
+          init_db(eng)
+          now = datetime.now(timezone.utc)
+          upsert_tenant(eng, tenant_id="drill-acme", name="drill-acme", tier="pro")
+          upsert(
+              eng, ForecastCycle,
+              {"id": "20260814_12z", "publication_ts": now,
+               "archive_source": "ci", "model_version": "v9"},
+              ["id"],
+          )
+          upsert(
+              eng, Signal,
+              {"timestamp": now, "instrument": "OJ_FUTURES", "action": "BUY",
+               "size": 1.0, "confidence": 0.7, "reasoning": "drill",
+               "forecast_cycle_id": "20260814_12z", "publication_ts": now,
+               "archive_source": "ci", "model_version": "v9"},
+              ["forecast_cycle_id"],
+          )
+          upsert(
+              eng, PaperLedger,
+              {"episode_id": 1, "entry_cycle": now, "entry_session": now,
+               "exit_session": now, "gross": 1.0, "net": 1.0,
+               "net_of_benchmark": 1.0, "fold": "oos", "in_oos": True,
+               "embargoed": False, "entry_weekend": False, "next_close_fill": False,
+               "fill_days_after_cycle": 1, "entry_freeze_prob": 0.1,
+               "entry_temperature_min": 5.0, "forecast_cycle_id": "20260814_12z",
+               "publication_ts": now, "model_version": "v9", "scored": True,
+               "archive_source": "ci", "vintage_hash": "0" * 64, "fetch_date": now},
+              ["forecast_cycle_id"],
+          )
+          with Session(eng) as s, s.begin():
+              apply_audit(s, AuditSpec(request_id="drill0001", tenant_id="drill-acme",
+                                       actor_id="drill", action="tenant.create",
+                                       resource="tenant", resource_id="drill-acme"))
+              apply_audit(s, AuditSpec(request_id="drill0002", tenant_id="drill-acme",
+                                       actor_id="drill", action="cycle.publish",
+                                       resource="cycle", resource_id="20260814_12z"))
+          from pakhi.ws4.audit_events import verify_chain_in_store
+          ok, bad = verify_chain_in_store(eng)
+          assert ok, f"seed chain broken at {bad}"
+          print("seeded cycle 20260814_12z + 1 ledger row + sealed chain")
+          EOF
+      - name: Base backup + off-host copy (pg_dump -Fc)
+        run: |
+          set -euo pipefail
+          python scripts/run_ws5_backup.py \
+            --source-url "$WS5_SOURCE_URL" \
+            --backup-dir "$BACKUP_DIR" \
+            --off-host-dir "$OFFHOST_DIR" \
+            --label ci
+          test -n "$(ls "$OFFHOST_DIR"/*.base)"
+          echo "off-host copy present: OK"
+      - name: Wipe-and-restore drill (snapshot -> wipe -> restore -> verify)
+        run: |
+          set -euo pipefail
+          python scripts/run_ws5_restore_drill.py \
+            --source-url "$WS5_SOURCE_URL" \
+            --scratch-url "$WS5_SCRATCH_URL" \
+            --backup-dir "$BACKUP_DIR"

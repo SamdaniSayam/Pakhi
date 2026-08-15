@@ -114,7 +114,18 @@ def ensemble_disagreement():
 
 @router.get("/ledger")
 def ledger(request: Request):
-    """Paper-ledger summary, clearly labeled paper / not live capital."""
+    """Paper-ledger summary, clearly labeled paper / not live capital.
+
+    WS-4 T2: in the secured posture (require_auth) the ledger is admin-only —
+    per-tenant keys carry operator by default and are denied, bootstrap keys
+    carry admin and pass. In the unauthenticated dev posture (no keys
+    configured) it stays open, byte-identical to the WS-3 contract.
+    """
+    scope = getattr(request.state, "ws4_scope", None)
+    if getattr(request.app.state, "require_auth", False) and not (
+        scope is not None and scope.can("admin")
+    ):
+        raise HTTPException(status_code=403, detail="ledger access requires the admin role")
     engine = request.app.state.read_engine
     with engine.connect() as conn:
         total = int(conn.execute(select(func.count()).select_from(PaperLedger)).scalar() or 0)

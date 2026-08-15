@@ -27,9 +27,7 @@ from pakhi.ws2.compute import ComputeError, compute_cycle
 from pakhi.ws2.db import get_engine, init_db
 from pakhi.ws2.ingest import INGESTED_DIR
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("ws2.t2.compute")
 
 

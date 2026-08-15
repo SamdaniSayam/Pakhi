@@ -1,0 +1,138 @@
+{
+  "contract": "billing-metering",
+  "version": "1.3",
+  "status": "LOCKED",
+  "gate": "T0-APPROVED-CONDITIONAL",
+  "decided_utc": "2026-08-15T00:00:00+00:00",
+  "blueprint": "docs/WS6_EXECUTION_BLUEPRINT.md",
+  "contract_doc": "docs/WS6_BILLING_METERING_CONTRACT.md",
+  "honest_premise": "bills service/compute/data access, never validated alpha; G1 UNDER-POWERED retained",
+  "units": {
+    "api_call": {
+      "definition": "authenticated request returning 2xx/3xx (successful); 4xx incl 429 never billed",
+      "source": "ws4-audit-chain (rows with status < 400)",
+      "never_billed": [
+        "4xx incl 429",
+        "5xx",
+        "503"
+      ]
+    },
+    "feed_hour": {
+      "definition": "authenticated /stream/signals subscription active >= 1h (connect-disconnect delta, floored)",
+      "source": "ws4-audit-chain + feed events"
+    },
+    "backtest_hour": {
+      "definition": "backtest_jobs row reaching status=done, wall-clock started_at->finished_at (locked per-job floor)",
+      "source": "backtest_jobs"
+    }
+  },
+  "tiers": {
+    "free": {
+      "rate_limit_per_min": 30,
+      "commercial_tier": 1,
+      "price_anchor_usd": 0
+    },
+    "pro": {
+      "rate_limit_per_min": 120,
+      "commercial_tier": 2,
+      "price_anchor_usd": 1500
+    },
+    "labs": {
+      "rate_limit_per_min": 300,
+      "commercial_tier": 3,
+      "price_anchor_usd": 10000
+    }
+  },
+  "reconciliation": {
+    "targets": [
+      "ws4-audit-chain(exact)",
+      "ws5-structured-access-logs(tolerance)"
+    ],
+    "limiter_role": "ops-signal-only",
+    "tolerance_percent": 1.0,
+    "hard_threshold_percent": 10.0,
+    "drift_response": {
+      "within_tolerance": "normal",
+      "beyond_tolerance": "S1 incident paged; invoicing blocked and flagged",
+      "extreme": "temporary key suspension + S1 + metering.suspend audit row; auto-lift on reconciliation"
+    }
+  },
+  "stripe": {
+    "sync_cadence": "daily every 24h",
+    "sync_script": "scripts/run_ws6_stripe_sync.py",
+    "idempotency": "per-day batch id -> usage record id 1:1",
+    "staleness_alert_hours": 24,
+    "webhook_dedupe": "on stripe event id",
+    "card_data": "never stored on our servers",
+    "subscription_item_id": "captured from customer.subscription webhook (data.object.items.data[0].id, si_...), stored on the tenant; usage records attach to it, never to the internal tenant_id; paid tenant without one fails loudly, free/trial skipped silently; subscription.deleted clears the linkage",
+    "price_ids": {
+      "free": "price_free",
+      "pro": "price_pro",
+      "labs": "price_labs"
+    }
+  },
+  "trial": {
+    "days": 14,
+    "one_per_org": true,
+    "expiry": "downgrade to free, never delete",
+    "conversion": "opens paid subscription"
+  },
+  "support_sla": {
+    "paid_tiers_only": true,
+    "severities": {
+      "S1": {
+        "meaning": "service down / data-integrity event",
+        "target": "4h",
+        "keywords": [
+          "down",
+          "outage",
+          "unavailable",
+          "data integrity",
+          "corrupt",
+          "breach",
+          "suspended",
+          "incident"
+        ]
+      },
+      "S2": {
+        "meaning": "degraded or blocking bug",
+        "target": "12h",
+        "keywords": [
+          "degraded",
+          "blocking",
+          "bug",
+          "error",
+          "slow",
+          "timeout",
+          "fail"
+        ]
+      },
+      "S3": {
+        "meaning": "minor bug / question",
+        "target": "2 business days",
+        "keywords": [
+          "question",
+          "minor",
+          "typo",
+          "docs",
+          "feature",
+          "request",
+          "how",
+          "why"
+        ]
+      }
+    },
+    "escalation": {
+      "S1": "page on-call immediately; S1 -> incident feed on /v1/status + audit chain; invoicing blocked if metering-related",
+      "S2": "respond within target; workaround if available; escalate to S1 on data-integrity or extended outage",
+      "S3": "respond within target (business days); batch with the next maintenance window"
+    }
+  },
+  "retention": "metering/rollup/billing rows are audit-chain rows, never pruned by the normal retention job",
+  "backwards_compat": "metering is read-only aggregation; WS-3/4/5 request contract unchanged",
+  "amendment_record": [
+    "v1.2->v1.3 (2026-08-15, T1 alignment): api_call tightened to 2xx/3xx successful requests only \u2014 the audit chain records status < 400, so 4xx (incl 429) and 5xx/503 are never billable; conservative and source-exact",
+    "v1.1->v1.2 (2026-08-15, T0 conditional approval): drift is S1 + suspension on extreme drift; daily Stripe sync + staleness alert; reconciliation targets = chain(exact) + access logs(tolerance), never Redis limiters"
+  ],
+  "payload_sha256": "5be1aa0d1269b9261e0fcdbcbfded56da25ff7b743f04f18c53ba9fe33bac3dd"
+}

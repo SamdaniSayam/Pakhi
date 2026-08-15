@@ -111,6 +111,9 @@ class BacktestJob(Base):
     # recorded so the 1-queued/5-min contract cap is enforced per client, not
     # globally. Nullable for back-compat with rows created before the column.
     client_id = Column(String, nullable=True, index=True)
+    # WS-4 T2: tenant scope for the row. Nullable for back-compat; NULL rows are
+    # treated as DEFAULT_TENANT_ID ("pakhi-internal") by the WS-4 scoping rules.
+    tenant_id = Column(String, nullable=True, index=True)
 
 
 def get_engine(url: str = "postgresql://postgres:postgres@localhost:5432/pakhi"):

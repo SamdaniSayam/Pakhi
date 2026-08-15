@@ -20,9 +20,7 @@ import sys
 
 from pakhi.ws2.ingest import IngestError, ingest_cycle, latest_12z_cycle
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("ws2.t1.ingest")
 
 
@@ -47,12 +45,16 @@ def main() -> int:
     args = parser.parse_args()
 
     cycle = args.cycle or latest_12z_cycle()
-    logger.info("ingesting 12Z cycle %s (source=%s, persist=%s)", cycle, args.source, not args.dry_run)
+    logger.info(
+        "ingesting 12Z cycle %s (source=%s, persist=%s)", cycle, args.source, not args.dry_run
+    )
     try:
         record = ingest_cycle(cycle, source=args.source, persist=not args.dry_run)
     except IngestError as exc:
         logger.error("REJECT %s: %s", type(exc).__name__, exc)
-        print(json.dumps({"ok": False, "cycle": cycle, "error": str(exc), "type": type(exc).__name__}))
+        print(
+            json.dumps({"ok": False, "cycle": cycle, "error": str(exc), "type": type(exc).__name__})
+        )
         return 1
 
     print(json.dumps(record, indent=2, default=str))

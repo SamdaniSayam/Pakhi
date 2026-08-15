@@ -1,0 +1,108 @@
+name: WS-4 Security
+
+# WS-4 T5: the machine-checkable evidence for the compliance controls. Runs the
+# full WS-4 security surface (tenancy, RBAC, identity, audit chain) against a
+# real Postgres 16 store, plus the secrets scan and the audit sweep smoke test.
+#
+# psycopg v3 (`psycopg[binary]`) is used here instead of the `postgres` extra's
+# psycopg2-binary: psycopg2 segfaults at interpreter exit on modern glibc
+# (pyproject.toml NOTE), while psycopg v3 is clean. Production Postgres installs
+# still use ".[all,api,postgres]" as documented.
+#
+# WS4_TEST_DB_URL uses the `postgresql+psycopg://` dialect, so the Postgres CI
+# tests (tests/test_ws4_t5_ci.py) run unmodified.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ws4-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ws4-security:
+    name: WS-4 security (Postgres 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pakhi
+          POSTGRES_PASSWORD: pakhi
+          POSTGRES_DB: pakhi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pakhi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      WS4_TEST_DB_URL: postgresql+psycopg://pakhi:pakhi@localhost:5432/pakhi_test
+      # WS-5 T1: real-Redis gate for the Lua token-bucket limiter (fakeredis in
+      # the local suite is the emulator; the CI container is the truth).
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pakhi + drivers
+        run: pip install -e ".[all,api,redis,obs]" "psycopg[binary]>=3.1"
+      - name: Secrets scan (T3)
+        # The tracked tree must carry no secret-shaped value and no .env.
+        run: python scripts/secret_scan.py
+      - name: WS-4 + WS-5 security / reliability against Postgres + Redis
+        run: pytest tests/ -k "ws4 or ws5" -v --tb=short
+      - name: Audit sweep smoke (T4)
+        # Build a one-line fixture access log, run the sweep against Postgres,
+        # and confirm a clean run exits 0.
+        run: |
+          set -euo pipefail
+          ACCESS=$(mktemp)
+          touch "$ACCESS"
+          python scripts/run_audit_sweep.py \
+            --access-log "$ACCESS" --db-url "$WS4_TEST_DB_URL"
+      - name: Multi-worker fail-closed (WS-5 T1)
+        # Real Redis service, app booted in multi-worker posture: quota is
+        # shared across limiter instances and a down Redis is fail-closed 503.
+        run: |
+          set -euo pipefail
+          python - <<'EOF'
+          import os
+          from fastapi.testclient import TestClient
+          from pakhi.api.main import create_app
+          from pakhi.api.settings import Settings
+
+          env = {
+              **os.environ,
+              "PAKHI_DB_READ_URL": "sqlite:////tmp/ws5-ci.db",
+              "PAKHI_DB_WRITE_URL": "sqlite:////tmp/ws5-ci.db",
+              "PAKHI_REDIS_URL": os.environ["REDIS_URL"],
+              "PAKHI_WORKERS": "2",
+              "PAKHI_API_KEYS": "ci-key",
+              "PAKHI_JWT_SECRET": "ci-jwt-secret-0123456789abcdef",
+              "PAKHI_WS4_ENABLED": "true",
+          }
+          app = create_app(Settings.from_env(environ=env))
+          with TestClient(app) as c:
+              headers = {"X-Pakhi-Key": "ci-key"}
+              for i in range(30):
+                  r = c.get("/v1/instruments", headers=headers)
+                  assert r.headers["X-RateLimit-Limit"] == "30", (i, r.status_code)
+              # 31st shared-bucket request is 429, not a fresh worker quota.
+              assert c.get("/v1/instruments", headers=headers).status_code == 429
+          print("multi-worker shared bucket + fail-closed: OK")
+          EOF

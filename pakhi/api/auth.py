@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -26,6 +26,22 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pakhi.api.errors import error_body
 from pakhi.api.settings import API_VERSION
+
+# WS-5 T1: Redis-backed buckets raise this when the shared store is unreachable;
+# the middleware maps it to the locked fail-closed 503 (never a loosened quota).
+from pakhi.ws5.redis_limiter import RedisUnavailableError
+
+# WS-4 T1: the human-lane refresh endpoint is authenticated by the opaque
+# refresh token in its body, not by a key/bearer, so both middlewares treat it
+# as auth-exempt (still rate-limited by client IP).
+AUTH_EXEMPT_PATHS = {"/v1/admin/tokens/refresh"}
+
+
+def _bearer_token(request: Request) -> str | None:
+    auth = request.headers.get("Authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
 
 
 def hash_key(key: str) -> str:
@@ -118,19 +134,54 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         allowed_keys: set[str] | None = None,
         require_auth: bool = False,
         limiter: TokenBucketLimiter | None = None,
+        tier_limiters: dict[str, TokenBucketLimiter] | None = None,
+        db_key_validator: Callable[[Request, str], bool] | None = None,
     ) -> None:
         super().__init__(app)
         self.allowed_keys = allowed_keys or set()
         self.require_auth = require_auth
         self.limiter = limiter or rate_limiter
+        # WS-4 T2: per-tier buckets (free/pro/labs) resolved from ws4_scope,
+        # which the outer Ws4AuthMiddleware sets before this one runs. When no
+        # scope/tier (no jwt_secret configured), falls back to the global one.
+        self.tier_limiters = tier_limiters or {}
+        # WS-4 T2: DB per-tenant keys are valid credentials too. Bootstrap keys
+        # stay validated against allowed_keys; anything else must pass this
+        # validator (DB lookup, fail-closed on DB errors).
+        self.db_key_validator = db_key_validator
+
+    def _limiter_for(self, scope: Any) -> TokenBucketLimiter:
+        tier = getattr(scope, "tier", None) if scope is not None else None
+        if tier and tier in self.tier_limiters:
+            return self.tier_limiters[tier]
+        return self.limiter
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
+        # WS-5 T4: /v1/health is now DB-free probe liveness — exempt from auth
+        # AND rate limiting (probes must never poison the anonymous bucket and
+        # must stay green through a Redis outage). Deep readiness/freshness
+        # moved to /v1/status (rate-limited, authed, cached — contract §6).
+        # WS-5 T2: /metrics is unauthenticated, admin network only (contract
+        # §3.2) — never 401/429, never quota consumption; network ACL is the
+        # deployment's job, not a request header.
+        if request.url.path in ("/metrics", "/v1/health"):
+            return await call_next(request)
+
         key_header = request.headers.get("X-Pakhi-Key") or request.query_params.get("key")
+        bearer = _bearer_token(request)
+        is_refresh = request.url.path in AUTH_EXEMPT_PATHS
+        scope = getattr(request.state, "ws4_scope", None)
+        limiter = self._limiter_for(scope)
 
         # CORS preflight: never 401/429, never consume quota — headers only.
-        if request.method == "OPTIONS":
-            client = self._client_id(request, key_header)
-            limit, remaining, reset_secs = self.limiter.peek(client)
+        # Auth-exempt paths (WS-4 refresh) behave the same: rate-limited, never
+        # rejected for missing credentials.
+        if request.method == "OPTIONS" or (is_refresh and not key_header and not bearer):
+            client = self._client_id(request, key_header, bearer, scope)
+            try:
+                limit, remaining, reset_secs = limiter.peek(client)
+            except RedisUnavailableError:
+                return self._redis_503(request)
             response = await call_next(request)
             self._stamp_rate_headers(response, limit, remaining, reset_secs)
             return response
@@ -138,8 +189,17 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         if key_header:
             hashed = hash_key(key_header)
             if self.allowed_keys and hashed not in self.allowed_keys:
-                return self._auth_error(request, 401, "unauthorized", "invalid API key")
+                valid_db_key = bool(
+                    self.db_key_validator and self.db_key_validator(request, hashed)
+                )
+                if not valid_db_key:
+                    return self._auth_error(request, 401, "unauthorized", "invalid API key")
             client = f"key_{hashed[:12]}"
+        elif bearer:
+            # WS-4 human lane: the JWT itself is validated by Ws4AuthMiddleware
+            # (runs outside this one); here it only consumes quota — keyed per
+            # user (sub) via the resolved scope, against the user's tier bucket.
+            client = self._client_id(request, None, bearer, scope)
         elif self.require_auth:
             return self._auth_error(
                 request, 401, "unauthorized", "missing required X-Pakhi-Key header"
@@ -147,8 +207,14 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         else:
             client = request.client.host if request.client else "127.0.0.1"
 
-        allowed, limit, remaining, reset_secs = self.limiter.check(client)
+        try:
+            allowed, limit, remaining, reset_secs = limiter.check(client)
+        except RedisUnavailableError:
+            return self._redis_503(request)
         if not allowed:
+            from pakhi.ws5 import metrics as ws5_metrics
+
+            ws5_metrics.record_ratelimit_rejection(getattr(scope, "tier", None) or "anonymous")
             return self._auth_error(
                 request,
                 429,
@@ -164,9 +230,17 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     @staticmethod
-    def _client_id(request: Request, key_header: str | None) -> str:
+    def _client_id(
+        request: Request,
+        key_header: str | None,
+        bearer: str | None = None,
+        scope: Any | None = None,
+    ) -> str:
         if key_header:
             return f"key_{hash_key(key_header)[:12]}"
+        actor_id = getattr(scope, "actor_id", None)
+        if bearer and actor_id:
+            return f"user_{actor_id}"
         return request.client.host if request.client else "127.0.0.1"
 
     @staticmethod
@@ -174,6 +248,21 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Reset"] = str(reset_secs)
+
+    @staticmethod
+    def _redis_503(request: Request) -> JSONResponse:
+        """WS-5 fail-closed: shared rate-limit store unreachable -> 503, never a
+        loosened or over-counted quota across workers. The response is tagged so
+        the WS-5 error-budget ledger records it as *fail-closed* (contract §2:
+        planned fail-closed 503s are recorded separately, never hidden)."""
+        request.state.ws5_fail_closed = True
+        return JSONResponse(
+            status_code=503,
+            content=error_body(
+                "redis_unavailable",
+                "rate-limit store unavailable (multi-worker mode)",
+            ),
+        )
 
     def _auth_error(
         self,

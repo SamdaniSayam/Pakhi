@@ -1,0 +1,97 @@
+{
+  "audit": {
+    "chain": "hash = sha256(prev_hash | canonical_payload); edit of any row breaks every subsequent link",
+    "covered_by_reconciliation": "all reads/access; sweep anchored on the nginx access log (independent), not the app middleware",
+    "events": [
+      "token.issue",
+      "key.create",
+      "key.revoke",
+      "tenant.create",
+      "backtest.submit"
+    ],
+    "mutation_atomicity": "audit row commits in the SAME transaction as the mutation; a commit without its audit row is a transaction failure",
+    "omission_detection": "sweep replays nginx access log vs audit_events by request_id; a missing mutation row fails",
+    "row": [
+      "tenant_id",
+      "actor_id",
+      "action",
+      "resource",
+      "resource_id",
+      "request_id",
+      "outcome",
+      "ts",
+      "prev_hash",
+      "hash"
+    ],
+    "tamper_detection": "edit a middle row => chain verification fails"
+  },
+  "backwards_compat": "WS-3 X-Pakhi-Key flow, error envelope, rate-limit headers, X-Pakhi-Edge-Status, and backtest client_id semantics keep working unchanged for existing keys; CI re-runs the full WS-3 suite against every WS-4 change",
+  "gate": "explicit user infra-first decision (recorded in WS4_PROGRESS.md); G1 is UNDER-POWERED, WS-4 is infrastructure never an edge claim",
+  "identity": {
+    "human": {
+      "access_token_lifetime_minutes": 15,
+      "claims": [
+        "sub",
+        "tenant_id",
+        "roles"
+      ],
+      "algorithm": "HS256",
+      "refresh": "opaque, rotating, hashed at rest; rotation revokes the old token; reuse of a revoked token revokes the whole family"
+    },
+    "machine": "X-Pakhi-Key, SHA-256 hashed at rest; per-tenant keys in Postgres with pk_live_/pk_test_ prefixes; env/file source retained as bootstrap/admin-only"
+  },
+  "locked_utc": "2026-08-14T00:00:00+00:00",
+  "reconciliation_anchor": "nginx access log, written outside the app code path, with request_id propagated through the proxy; nginx config ships in T4 (no proxy exists in the repo today)",
+  "roles": [
+    {
+      "admin": "operator + tenant management, human-user management, audit-log read, paper-ledger read"
+    },
+    {
+      "operator": "viewer + own-tenant backtests + own-tenant key management; default grant for machine keys"
+    },
+    {
+      "viewer": "read global reference data only"
+    }
+  ],
+  "secrets": {
+    "boot_gate": "missing or weak PAKHI_JWT_SECRET (or equal to a documented test default) refuses startup; never a silent runtime default",
+    "ci": "secret-scan step + tree-walk test asserting no pk_live_-prefixed or PAKHI_JWT_SECRET=<value> leaks",
+    "tenant_keys": "SHA-256 hashed in Postgres; only prefix stored/returned; plaintext shown exactly once at creation"
+  },
+  "tenancy": {
+    "admin_only_tables": [
+      "paper_ledger"
+    ],
+    "default_tenant": "pakhi-internal",
+    "global_reference_tables": [
+      "forecast_cycles",
+      "signals",
+      "metrics"
+    ],
+    "isolation": "query-layer WHERE tenant_id = :tid injected by get_tenant_scope; missing scope filter fails a test; cross-tenant reads return 404/403",
+    "tenant_owned_tables": [
+      "tenants",
+      "users",
+      "api_keys",
+      "backtest_jobs",
+      "audit_events"
+    ]
+  },
+  "tiers": {
+    "free": {
+      "limit_per_min": 30
+    },
+    "labs": {
+      "limit_per_min": 300
+    },
+    "pro": {
+      "limit_per_min": 120
+    }
+  },
+  "tiers_scope": "token bucket stays in-memory, thread-safe, single-worker only; multi-worker bucket state is WS-5/Redis",
+  "uptime": "conditional offer: 99.9% availability is offered to paying customers only while the WS-5 reliability machinery is live AND the 30-day measurement window is open and recorded; single-worker remains the documented posture; no achieved-uptime claim until the window elapses and evidence accrues",
+  "version": "1.1",
+  "source_doc": "docs/WS4_SECURITY_AND_TENANCY_CONTRACT.md",
+  "payload_sha256": "7ecc524709601e5f645a883858aa34d1a9235d00026296d0f4236e3714a65a16",
+  "_amended": "2026-08-14 T6 (WS-5): no-SLA clause upgraded to a CONDITIONAL offer \u2014 99.9% is offered only while the WS-5 machinery is live (Redis multi-worker fail-closed, metrics, SLO accounting + status page, green DR drill) AND the 30-day measurement window is open and recorded. The offer's evidence accrues during the window; Pakhi never fabricates an achieved uptime number (G1 remains UNDER-POWERED)."
+}

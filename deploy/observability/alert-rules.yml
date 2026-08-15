@@ -1,0 +1,76 @@
+groups:
+  - name: pakhi-reliability.rules
+    # Single source of truth: thresholds are rendered from data/ws5/reliability_contract.json by scripts/ws5_gen_observability.py.
+    rules:
+      - alert: PakhiApiErrorRateBreach
+        expr: sum(rate(pakhi_http_5xx_total[5m])) / sum(rate(pakhi_http_requests_total[5m])) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error rate above the SLO-1 budget burn (5xx only)."
+          contract_path: "slo.api_availability_target"  # rendered value: 1 - 0.999
+      - alert: PakhiErrorBudgetBurn
+        expr: pakhi_error_budget_remaining_fraction < 0.5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: ">=50% of the 30-day error budget consumed; status page shows error_budget_remaining."
+          contract_path: "slo.burn_alert_fraction"  # rendered value: 1 - 0.5
+      - alert: PakhiSignalLatencyBreach
+        expr: pakhi_cycle_ingestion_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Published signal not served within the SLO-2 latency."
+          contract_path: "slo.signal_latency_seconds"  # rendered value: 60
+      - alert: PakhiStalePipeline
+        expr: pakhi_cycle_freshness_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipeline stale past SLO-3 (freshness >= 1 cycle)."
+          contract_path: "slo.cycle_period_seconds * slo.freshness_max_cycles_stale"  # rendered value: 86400 * 1
+      - alert: PakhiCycleFailed
+        expr: pakhi_cycle_status == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latest published cycle status is failed."
+          contract_path: "metrics.families.pipeline (pakhi_cycle_status, 0 = failed)"  # rendered value: 0
+      - alert: PakhiNoOkCycle
+        expr: time() - pakhi_cycle_last_ok_timestamp_seconds > 86400
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No OK cycle for a full cycle period."
+          contract_path: "slo.cycle_period_seconds"  # rendered value: 86400
+      - alert: PakhiRedisFailClosed
+        expr: sum(increase(pakhi_http_requests_total{status="503"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multi-worker Redis down: requests failing closed with fail_closed_http (planned 503s, recorded in the budget ledger)."
+          contract_path: "redis.fail_closed_http"  # rendered value: 503
+      - alert: PakhiAuditChainBroken
+        expr: pakhi_audit_chain_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Audit chain verification is failing."
+          contract_path: "metrics.families.store (pakhi_audit_chain_ok, 1 = ok)"  # rendered value: 0
+      - alert: PakhiSkillDrift
+        expr: pakhi_live_bss_vs_baseline < 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained skill regression below the WS-2 baseline."
+          contract_path: "metrics.families.skill (pakhi_live_bss_vs_baseline, 0 = at baseline)"  # rendered value: 0

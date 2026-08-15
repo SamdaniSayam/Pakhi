@@ -76,9 +76,18 @@ def validate_backtest_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_backtest_job(
-    write_engine, params: dict[str, Any], client_id: str | None = None
+    write_engine,
+    params: dict[str, Any],
+    client_id: str | None = None,
+    tenant_id: str | None = None,
+    audit=None,
 ) -> dict[str, Any]:
-    """Validate params and create a queued backtest job in the store."""
+    """Validate params and create a queued backtest job in the store.
+
+    When ``audit`` (a ``pakhi.ws4.audit_events.AuditSpec``) is given, the audit
+    row is sealed in the same session and commits with the job — the §3.5
+    atomic-with-mutation guarantee for backtest submit.
+    """
     valid_params = validate_backtest_params(params)
     job_id = f"bt_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)
@@ -90,10 +99,15 @@ def create_backtest_job(
         params=valid_params,
         result=None,
         client_id=client_id,
+        tenant_id=tenant_id,
     )
 
     with Session(write_engine) as session:
         session.add(job)
+        if audit is not None:
+            from pakhi.ws4.audit_events import apply_audit
+
+            apply_audit(session, audit.with_resource_id(job_id))
         session.commit()
 
     return {

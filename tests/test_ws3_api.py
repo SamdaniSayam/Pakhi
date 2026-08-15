@@ -84,9 +84,10 @@ def test_health_ok(settings_factory, tmp_db):
 
 
 def test_status_latest_cycle(settings_factory, tmp_db):
-    # Fixed timestamps: a "now-relative" cycle id/date pair is a time-bomb that
-    # breaks the day after the nominal date (2026-08-13).
-    pub = datetime(2026, 8, 13, 12, 0, tzinfo=timezone.utc)
+    # Now-relative timestamps (WS-5 T4 pattern): a fixed nominal date is a
+    # time-bomb that turns stale once the date passes (staleness >= 36 h fires
+    # the X-Pakhi-Staleness header regardless of intent).
+    pub = datetime.now(timezone.utc) - timedelta(minutes=30)
     stale = pub - timedelta(days=3)
     _seed(tmp_db, [("20260810_12z", stale), ("20260813_12z", pub)])
     app = create_app(settings_factory())
@@ -96,7 +97,7 @@ def test_status_latest_cycle(settings_factory, tmp_db):
     body = resp.json()
     assert body["db_ok"] is True
     assert body["latest_cycle_id"] == "20260813_12z"
-    assert body["publication_ts"] == "2026-08-13T12:00:00+00:00"
+    assert body["publication_ts"] == pub.isoformat()
     expected = (datetime.now(timezone.utc) - pub).total_seconds()
     assert body["staleness_seconds"] == pytest.approx(expected, abs=2.0)
     # No worker.last_run metric yet -> documented proxy: latest cycle publication.
@@ -105,7 +106,7 @@ def test_status_latest_cycle(settings_factory, tmp_db):
 
 
 def test_status_worker_last_run_prefers_metrics(settings_factory, tmp_db):
-    pub = datetime(2026, 8, 13, 12, 0, tzinfo=timezone.utc)
+    pub = datetime.now(timezone.utc) - timedelta(minutes=30)
     _seed(tmp_db, [("20260813_12z", pub)])
     worker_ts = pub + timedelta(minutes=5)
     _seed_metrics(tmp_db, "worker.last_run", worker_ts)
@@ -114,7 +115,7 @@ def test_status_worker_last_run_prefers_metrics(settings_factory, tmp_db):
         resp = client.get("/v1/status")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["worker_last_run"] == "2026-08-13T12:05:00+00:00"
+    assert body["worker_last_run"] == worker_ts.isoformat()
     assert body["latest_cycle_id"] == "20260813_12z"
 
 

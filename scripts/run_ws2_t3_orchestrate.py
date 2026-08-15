@@ -36,9 +36,7 @@ from pakhi.ws2.orchestrate import (
     run_orchestration,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("ws2.t3.orchestrate")
 
 
@@ -89,7 +87,9 @@ def main() -> int:
         init_db(engine)
 
     if dates is not None:
-        logger.info("replay %d cached cycles -> %s (persist=%s)", len(dates), db_url, not args.dry_run)
+        logger.info(
+            "replay %d cached cycles -> %s (persist=%s)", len(dates), db_url, not args.dry_run
+        )
         summary = replay_cycles(
             dates,
             engine=engine,

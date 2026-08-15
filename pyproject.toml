@@ -75,6 +75,14 @@ io = [
 postgres = [
     "psycopg2-binary>=2.9",
 ]
+# WS-5 runtime: shared rate-limit state across uvicorn workers.
+redis = [
+    "redis>=5.0",
+]
+# WS-5 observability: /metrics exporter + multiprocess aggregation.
+obs = [
+    "prometheus-client>=0.20",
+]
 # WS-3 API runtime. NOT in [all] so CI test installs stay lean and the
 # psycopg2/teardown class of issues is kept out of the base install (see the
 # NOTE above). Postgres-backed API deployments install ".[all,api,postgres]".
@@ -84,12 +92,15 @@ api = [
     "pydantic>=2.0",
     "websockets>=12.0",
     "httpx>=0.27",
+    "PyJWT>=2.8",
 ]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.4.0",
     "pre-commit>=3.0",
+    "fakeredis>=2.20",
+    "lupa>=2.0",
 ]
 all = [
     "pakhi[ml,trading,viz,io,dev]",

@@ -8,6 +8,7 @@ whenever a new WS-2 forecast cycle completes.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -32,7 +33,32 @@ async def stream_signals(websocket: WebSocket):
         await websocket.close(code=1008, reason="unauthorized: invalid or missing X-Pakhi-Key")
         return
 
+    # WS-6 T1: feed metering — a durable connect/disconnect audit record for the
+    # feed_hour billable unit. Best-effort: a missing row surfaces as
+    # reconciliation drift (S1), never as a broken stream.
+    from pakhi.ws6 import feed_events
+
+    engine = getattr(websocket.app.state, "write_engine", None)
+    tenant_id = None
+    session_id = feed_events.new_session_id()
+    try:
+        tenant_id = await asyncio.to_thread(
+            feed_events.resolve_tenant_id, engine, hash_key(key_header) if key_header else None
+        )
+    except Exception:
+        tenant_id = None
+    if tenant_id:
+        websocket.scope[feed_events.SID_SCOPE_KEY] = session_id
+        websocket.scope["ws6_feed_tenant"] = tenant_id
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(
+                feed_events.record_connect, engine, tenant_id, session_id, session_id
+            )
+
     await broadcaster.connect(websocket)
+    from pakhi.ws5 import metrics as ws5_metrics
+
+    ws5_metrics.ws_connected()
     try:
         while True:
             try:
@@ -47,3 +73,11 @@ async def stream_signals(websocket: WebSocket):
     except Exception as exc:
         logger.warning("WebSocket handler exception: %s", exc)
         broadcaster.disconnect(websocket)
+    finally:
+        ws5_metrics.ws_disconnected()
+        tenant_id = websocket.scope.get("ws6_feed_tenant")
+        if tenant_id:
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(
+                    feed_events.record_disconnect, engine, tenant_id, session_id, session_id
+                )

@@ -39,8 +39,10 @@ def auth_app(tmp_path):
 
 
 def test_rate_limit_headers_present(auth_app):
+    # WS-5 T4 migration: /v1/health is now DB-free probe liveness (no auth, no
+    # rate limit); rate-limit header semantics live on the deep /v1/status page.
     with TestClient(auth_app) as client:
-        resp = client.get("/v1/health")
+        resp = client.get("/v1/status")
         assert resp.status_code == 200
         assert "X-RateLimit-Limit" in resp.headers
         assert "X-RateLimit-Remaining" in resp.headers
@@ -65,20 +67,28 @@ def test_invalid_api_key_401(tmp_path):
         assert app.state.require_auth is True
 
         # Missing key -> 401 with locked envelope + contract headers
-        res1 = client.get("/v1/health")
+        # (WS-5 T4: auth assertions moved to the deep /v1/status page; health
+        # is unauthenticated liveness).
+        res1 = client.get("/v1/status")
         assert res1.status_code == 401
         assert res1.json()["error"]["code"] == "unauthorized"
         assert res1.headers["X-Pakhi-Version"] == "1.1"
         assert res1.headers["X-Request-ID"]
 
         # Wrong key -> 401
-        res2 = client.get("/v1/health", headers={"X-Pakhi-Key": "wrong_key"})
+        res2 = client.get("/v1/status", headers={"X-Pakhi-Key": "wrong_key"})
         assert res2.status_code == 401
 
         # Valid key -> 200
-        res3 = client.get("/v1/health", headers={"X-Pakhi-Key": valid_key})
+        res3 = client.get("/v1/status", headers={"X-Pakhi-Key": valid_key})
         assert res3.status_code == 200
         assert "X-RateLimit-Limit" in res3.headers
+
+        # Health stays unauthenticated liveness even when auth is required.
+        probe = client.get("/v1/health")
+        assert probe.status_code == 200
+        assert probe.json() == {"status": "ok"}
+        assert "X-RateLimit-Limit" not in probe.headers
 
 
 def test_api_key_hash_stored_never_plaintext():
@@ -89,18 +99,20 @@ def test_api_key_hash_stored_never_plaintext():
 
 
 def test_rate_limit_exceeded_429(auth_app):
+    # WS-5 T4 migration: 429 semantics live on /v1/status (deep page); health
+    # is liveness and never 429s.
     # Drop the global limiter to 2 req/min for this test (restored by fixture).
     rate_limiter.rate_limit = 2
     rate_limiter.window_seconds = 60
 
     with TestClient(auth_app) as client:
-        r1 = client.get("/v1/health")
+        r1 = client.get("/v1/status")
         assert r1.status_code == 200
 
-        r2 = client.get("/v1/health")
+        r2 = client.get("/v1/status")
         assert r2.status_code == 200
 
-        r3 = client.get("/v1/health")
+        r3 = client.get("/v1/status")
         assert r3.status_code == 429
         err = r3.json()
         assert err["error"]["code"] == "rate_limit_exceeded"

@@ -55,12 +55,28 @@ Pakhi is an enterprise Data-as-a-Service (DaaS) platform. It ingests raw meteoro
 
 ### 1.3 Commercial Monetization
 
+| Tier | Target Client | Monthly Pricing | Key Features & Deliverables |
+|---|---|---|---|
+| Community Edition (Tier 1) | Quants, Academic Researchers, Grassroots Devs | $0 (Forever Free) | Open-source triples-sigfast engine; standard data connectors (NOAA GFS, ERA5, Open-Meteo); synthetic backtesting & XGBoost baselines |
+| Managed Data API (Tier 2) | Commodity Trading Desks, Energy Funds, CTAs | $1,500–5,000/mo | Low-latency REST & WebSocket live signal stream; flagship Ensemble Disagreement Index (ECMWF vs GFS divergence); cloud-trained ML models with proven OOS skill; point-in-time backtesting on as-published forecast archives |
+| Enterprise Infrastructure (Tier 3) | Institutional Funds, Power Grids, Reinsurance | $10,000+/mo (or annual) | Dedicated cloud instances in SOC2-compliant environments; custom model training & proprietary data blending; catastrophe bond & weather derivative risk curves; dedicated SLA & high-frequency execution infrastructure |
+
 * **Community Edition (Open Source):** Free access to basic data connectors (NOAA, ERA5), synthetic historical backtesting, and XGBoost baseline models. Drives grassroots quant adoption and establishes trust. The open-source core is the technical resume: it proves computational rigor to skeptical quantitative researchers.
-* **Pakhi Managed API (Enterprise Tier — $1,500 – $10,000+/mo):**
+* **Pakhi Managed API (Tier 2 — $1,500 – $5,000+/mo):**
   * Low-latency REST/WebSocket API delivering live trading signals and ensemble disagreement metrics.
   * Access to proprietary, cloud-trained deep learning models — **only those that have demonstrated out-of-sample skill over ECMWF/GFS baselines**.
   * Enterprise cloud backtesting infrastructure for running 20-year portfolio simulations on as-published forecast archives.
 * **Pakhi Enterprise (Tier 3 — $10,000+/mo or custom annual):** dedicated cloud instances, custom model training, SOC2-compliant environments for blending Pakhi signals with client data.
+
+**Technical API rate-limiting quotas (WS-4 enforced).** Tenant API keys map to
+automated per-minute rate-limiting buckets (single source: the WS-4 security &
+tenancy contract `tiers` section; enforced by `AuthAndRateLimitMiddleware`):
+
+| Rate-Limit Tier | Throughput Limit | Intended Operational Use |
+|---|---|---|
+| `free` | 30 requests / minute | Default quota for trial accounts, public endpoints, and developer sandbox testing |
+| `pro` | 120 requests / minute | Standard quota for Tier 2 Managed API subscribers running real-time signal strategies |
+| `labs` | 300 requests / minute | High-throughput quota for Tier 3 Enterprise clients executing high-frequency backtests & continuous WebSocket feeds |
 
 ---
 

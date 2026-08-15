@@ -22,6 +22,7 @@ from pakhi.api.auth import hash_key
 from pakhi.api.jobs import create_backtest_job, execute_job_by_id
 from pakhi.api.serialize import utc
 from pakhi.ws2.db import BacktestJob
+from pakhi.ws4.tenant import DEFAULT_TENANT_ID
 
 router = APIRouter(prefix="/v1", tags=["backtests"])
 
@@ -36,6 +37,40 @@ def _client_id(request: Request) -> str:
     if key_header:
         return f"key_{hash_key(key_header)[:12]}"
     return request.client.host if request.client else "127.0.0.1"
+
+
+def _scope_tenant(request: Request) -> str:
+    """Tenant the request is scoped to; anonymous/absent scope = default tenant."""
+    scope = getattr(request.state, "ws4_scope", None)
+    return (scope.tenant_id if scope is not None else None) or DEFAULT_TENANT_ID
+
+
+def _audit_spec(request: Request, *, action: str, resource: str) -> Any:
+    """Build the T4 atomic-audit spec from the resolved request context."""
+    from pakhi.ws4.audit_events import AuditSpec
+
+    scope = getattr(request.state, "ws4_scope", None)
+    return AuditSpec(
+        request_id=getattr(request.state, "request_id", "-"),
+        tenant_id=_scope_tenant(request),
+        actor_id=(scope.actor_id if scope is not None else "-") or "-",
+        action=action,
+        resource=resource,
+    )
+
+
+def _get_job(request: Request, job_id: str) -> BacktestJob | None:
+    """Fetch a job but only if it belongs to the caller's tenant — a cross-tenant
+    read is the same as not existing (404)."""
+    tenant_id = _scope_tenant(request)
+    with Session(request.app.state.read_engine) as session:
+        job = session.get(BacktestJob, job_id)
+    if job is None or job.tenant_id not in (None, tenant_id):
+        with Session(request.app.state.write_engine) as write_session:
+            job = write_session.get(BacktestJob, job_id)
+        if job is None or job.tenant_id not in (None, tenant_id):
+            return None
+    return job
 
 
 @router.post("/backtests", status_code=201)
@@ -64,7 +99,13 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
             )
 
     try:
-        job_info = create_backtest_job(write_engine, body, client_id=client_id)
+        job_info = create_backtest_job(
+            write_engine,
+            body,
+            client_id=client_id,
+            tenant_id=_scope_tenant(request),
+            audit=_audit_spec(request, action="backtest.submit", resource="backtest_job"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
@@ -76,14 +117,8 @@ def submit_backtest(request: Request, body: dict[str, Any], background_tasks: Ba
 
 @router.get("/backtests/{job_id}")
 def get_backtest_status(request: Request, job_id: str):
-    """Retrieve status and details for a backtest job."""
-    job = None
-    with Session(request.app.state.read_engine) as session:
-        job = session.get(BacktestJob, job_id)
-
-    if not job:
-        with Session(request.app.state.write_engine) as write_session:
-            job = write_session.get(BacktestJob, job_id)
+    """Retrieve status and details for a backtest job (own-tenant only)."""
+    job = _get_job(request, job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail=f"backtest job {job_id!r} not found")
@@ -107,14 +142,8 @@ def get_backtest_status(request: Request, job_id: str):
 
 @router.get("/backtests/{job_id}/result")
 def get_backtest_result(request: Request, job_id: str):
-    """Stream or return stored backtest result artifact when done."""
-    job = None
-    with Session(request.app.state.read_engine) as session:
-        job = session.get(BacktestJob, job_id)
-
-    if not job:
-        with Session(request.app.state.write_engine) as write_session:
-            job = write_session.get(BacktestJob, job_id)
+    """Stream or return stored backtest result artifact when done (own-tenant)."""
+    job = _get_job(request, job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail=f"backtest job {job_id!r} not found")

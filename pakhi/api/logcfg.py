@@ -67,6 +67,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        request.state.request_id = rid  # WS-4 T4: audit appender + middleware read it
         token = request_id_var.set(rid)
         start = time.perf_counter()
         try:

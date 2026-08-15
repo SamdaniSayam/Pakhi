@@ -17,12 +17,14 @@ import yaml
 
 from pakhi.ws5.contract import (
     api_availability_target,
+    backup_age_alert_threshold_hours,
     burn_alert_fraction,
     cycle_period_seconds,
     freshness_max_cycles_stale,
     redis_fail_closed_http,
     reliability_contract,
     signal_latency_seconds,
+    stripe_sync_staleness_alert_threshold_seconds,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +50,8 @@ EXPECTED_ALERTS = {
     "PakhiRedisFailClosed",
     "PakhiAuditChainBroken",
     "PakhiSkillDrift",
+    "PakhiBackupStale",
+    "PakhiStripeSyncStale",
 }
 
 
@@ -114,6 +118,14 @@ def test_alert_rules_thresholds_equal_contract_twin() -> None:
     # Redis fail-closed alert keys on the fail_closed_http status code.
     expr = rules["PakhiRedisFailClosed"]["expr"]
     assert f'status="{redis_fail_closed_http()}"' in expr
+
+    # Backup age: threshold in seconds = hours * 3600.
+    expr = rules["PakhiBackupStale"]["expr"]
+    assert f"> {backup_age_alert_threshold_hours() * 3600}" in expr
+
+    # Stripe sync staleness: threshold in seconds.
+    expr = rules["PakhiStripeSyncStale"]["expr"]
+    assert f"> {stripe_sync_staleness_alert_threshold_seconds()}" in expr
 
     for _, rule in rules.items():
         # Every threshold is annotated with its twin path + rendered value.

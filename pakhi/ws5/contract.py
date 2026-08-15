@@ -77,3 +77,11 @@ def rpo_cycles() -> int:
 
 def rto_hours() -> int:
     return reliability_contract()["dr"]["rto_hours"]
+
+
+def backup_age_alert_threshold_hours() -> int:
+    return reliability_contract()["backup_age"]["alert_threshold_hours"]
+
+
+def stripe_sync_staleness_alert_threshold_seconds() -> int:
+    return reliability_contract()["stripe_sync_staleness"]["alert_threshold_seconds"]

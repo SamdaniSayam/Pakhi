@@ -22,11 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pakhi.ws5.contract import (
     api_availability_target,
+    backup_age_alert_threshold_hours,
     burn_alert_fraction,
     cycle_period_seconds,
     freshness_max_cycles_stale,
     redis_fail_closed_http,
     signal_latency_seconds,
+    stripe_sync_staleness_alert_threshold_seconds,
 )
 
 RULES_ANNOTATION = (
@@ -50,6 +52,15 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+  # Backup metrics: the backup script writes .prom files to
+  # deploy/backups/.metrics/. In production, either node_exporter
+  # (--collector.textfile.directory) or a sidecar serves these over HTTP.
+  # The scrape target below assumes a local textfile exporter on :9100.
+  - job_name: pakhi-backup-textfile
+    scrape_interval: 60s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["localhost:9100"]
 """
 
 
@@ -159,6 +170,34 @@ def _rules_body() -> str:
             "value": "0",
             "severity": "warning",
             "summary": "Sustained skill regression below the WS-2 baseline.",
+        },
+        {
+            "alert": "PakhiBackupStale",
+            "expr": (
+                f"time() - pakhi_backup_last_success_timestamp_seconds "
+                f"> {backup_age_alert_threshold_hours() * 3600}"
+            ),
+            "for": "5m",
+            "path": "backup_age.alert_threshold_hours",
+            "value": f"{backup_age_alert_threshold_hours()}h",
+            "severity": "critical",
+            "summary": (
+                "No successful backup in the last 26h; RPO assurance at risk."
+            ),
+        },
+        {
+            "alert": "PakhiStripeSyncStale",
+            "expr": (
+                f"time() - pakhi_stripe_last_sync_timestamp "
+                f"> {stripe_sync_staleness_alert_threshold_seconds()}"
+            ),
+            "for": "5m",
+            "path": "stripe_sync_staleness.alert_threshold_seconds",
+            "value": f"{stripe_sync_staleness_alert_threshold_seconds()}s",
+            "severity": "warning",
+            "summary": (
+                "Stripe billing sync has not run in 2h; metering may drift."
+            ),
         },
     ]
 

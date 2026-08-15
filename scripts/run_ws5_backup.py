@@ -146,6 +146,20 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _write_backup_timestamp(backup_dir: Path) -> None:
+    """Write the last-success timestamp for Prometheus textfile_collector."""
+    ts_dir = backup_dir / ".metrics"
+    ts_dir.mkdir(parents=True, exist_ok=True)
+    ts_file = ts_dir / "backup_last_success.prom"
+    now = datetime.now(timezone.utc).timestamp()
+    ts_file.write_text(
+        f"# HELP pakhi_backup_last_success_timestamp_seconds "
+        f"Unix seconds of the last successful backup.\n"
+        f"# TYPE pakhi_backup_last_success_timestamp_seconds gauge\n"
+        f"pakhi_backup_last_success_timestamp_seconds {now:.0f}\n"
+    )
+
+
 def run_backup(
     source_url: str,
     backup_dir: Path,
@@ -212,6 +226,7 @@ def run_backup(
         if f.stat().st_mtime < cutoff:
             f.unlink(missing_ok=True)
 
+    _write_backup_timestamp(backup_dir)
     return manifest
 
 

@@ -74,3 +74,19 @@ groups:
         annotations:
           summary: "Sustained skill regression below the WS-2 baseline."
           contract_path: "metrics.families.skill (pakhi_live_bss_vs_baseline, 0 = at baseline)"  # rendered value: 0
+      - alert: PakhiBackupStale
+        expr: time() - pakhi_backup_last_success_timestamp_seconds > 93600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful backup in the last 26h; RPO assurance at risk."
+          contract_path: "backup_age.alert_threshold_hours"  # rendered value: 26h
+      - alert: PakhiStripeSyncStale
+        expr: time() - pakhi_stripe_last_sync_timestamp > 7200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stripe billing sync has not run in 2h; metering may drift."
+          contract_path: "stripe_sync_staleness.alert_threshold_seconds"  # rendered value: 7200s

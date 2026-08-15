@@ -23,10 +23,13 @@ the go-to-market loop. Current state of each:
 
 | Item | State (evidence) |
 |---|---|
-| G1 alpha validation | **UNDER-POWERED**: N = 7 OOS event-trades < N_min = 8 (`data/ws1/g1_decision.json`). No alpha claim is allowed. |
-| G2 live signals + trials | **ZERO_TRADES**: harness built (`scripts/run_ws2_t3_orchestrate.py`, `data/ws2/paper.db`), but ledger is **empty** (0 events, 0 signals, 2 cycles ingested); `ws2-orchestrate.timer` **inactive** on this host. |
+| WS-0 real-data foundation | `data/ws0/freeze_pit.parquet`, `freeze_signal_eval.csv`, `g0_evidence.csv`, `gfs_vintage_manifest.json`, `manifest.json`, `build_continuous.py`, `build_pit.py` — point-in-time dataset exists; continuous contracts built. |
+| G1 alpha validation | **UNDER-POWERED**: N = 7 OOS event-trades < N_min = 8 (`data/ws1/g1_decision.json`). Sharpe = −0.19, CI [−1.02, +2.11], p = 0.63. **No alpha claim is allowed.** G1 re-run deferred to Phase 2 live paper-trading to accumulate events. |
+| G2 live signals + trials | **ZERO_TRADES** (not a failure — the honest baseline): harness built (`scripts/run_ws2_t3_orchestrate.py`, `data/ws2/paper.db`), but ledger is **empty** (0 events, 0 signals, 2 forecast cycles ingested); `ws2-orchestrate.timer` **inactive** on this host. The harness proved the architecture runs; the OJ wedge simply hasn't produced scored events yet. |
 | G3 uptime + contracts | SLO measurement window **OPEN 2026-08-14 → 2026-09-13** (WS-5 T6); 99.9 % not yet demonstrated; zero paid contracts. |
-| SOC2 | Controls operational and **being observed** (clock running since 2026-08-14); Type I / Type II not started. |
+| WS-3 API | Deploy stack present (`docker-compose.yml`, `deploy/nginx`, `deploy/observability`, `deploy/ws2-orchestrate.*`); API contract pinned (`data/ws3/api_contract.json`); OpenAPI + Swagger live. |
+| WS-4/WS-5 SOC2 | Controls operational and **being observed** (clock running since 2026-08-14); SLO window 2026-08-14 → 2026-09-13 (30 days). Type I / Type II not started. |
+| WS-6 billing | Sync script (`scripts/run_ws6_stripe_sync.py`) + CI nightly cron (`ws6-stripe-sync.yml`); subscription item id captured from webhook; trial automation + support SLA in place. Test-mode only — no live Stripe keys yet. |
 | WS-7 Distribution & GTM | Not started. |
 | Legal | Counsel **not engaged**; TOS / adviser-CTA positioning / data-licensing un-reviewed. |
 | Housekeeping | No baseline commit; runbooks/restore drills exist (WS-5) but not exercised on a schedule. |
@@ -56,17 +59,25 @@ it:
 
 | Gate | Current | Exit criterion | What closes it |
 |---|---|---|---|
-| **G1** | UNDER-POWERED (N=7 < 8) | Cost-adjusted OOS Sharpe > 1.0 at N ≥ ~30 with CI — **or documented pivot** | Live paper harness accumulates event-trades; G1 re-run at N ≥ 8 (interim verdicts), full verdict at N ≥ ~30 |
+| **G1** | UNDER-POWERED (N=7 < 8) | Cost-adjusted OOS Sharpe > 1.0 at N ≥ ~30 with CI — **or documented pivot** | Live paper harness accumulates event-trades; G1 re-run at N ≥ 8 (interim verdict), full verdict at N ≥ ~30 |
 | **G2** | ZERO_TRADES | Live API serving real signals ≥ 30 days; **first 14-day trials active** | Harness running on schedule; signals persisted + served; ≥ 1 real trial tenant onboarded via WS-6 automation |
 | **G3** | Window open | 99.9 % uptime / 30 days; **1–2 paid enterprise contracts**; SOC2 controls operational and observed | Window closes 2026-09-13 → first SLO accounting; WS-6 billing goes from test-mode to live subscribers |
 | **G4** | Not started | Multi-instrument; **SOC2 Type I**; repeatable sales motion | Add ag/cat-bond signals (each must clear G1-style validation); Type I snapshot; documented sales playbook |
 | **G5** | Not started | **SOC2 Type II**; enterprise (Tier 3) live; churn < 2 % | ≥ 3–6 months of observed controls after Type I; dedicated-instance offering |
+
+> **G1 verdicts are two-stage.** The first (N ≥ 8) is an interim read on the
+> live OJ wedge — it can clear the wedge, confirm it's under-powered and defer
+> to the full sample, or trigger a pivot. The second (N ≥ ~30 with CI) is the
+> binding go/no-go. Between the two, the founder is free to engage customers
+> and investors on the live architecture and provenance story — but **no
+> performance claim may be made until the full G1 verdict**.
 
 ## 4. REMAINING WORKSTREAMS
 
 ### WS-1R — G1 accumulation (live OJ paper harness) — *the critical path*
 - **What exists:** `scripts/run_ws2_t1_ingest.py` (12Z GFS backfill, live), `run_ws2_t2_compute.py`, `run_ws2_t3_orchestrate.py`, `data/ws2/paper.db` (schema: forecast_cycles / signals / paper_ledger), pre-registered protocol (frozen θ_p, 2-session hold, ≤ 1 trade/episode, `data/ws2/paper_trading_protocol.json`).
 - **What remains:** (a) **activate** the orchestrator (`ws2-orchestrate.timer` is inactive); (b) prove the loop appends: cycle → signal → ledger row, daily; (c) monitor event accumulation toward N ≥ 8; (d) run the G1 re-run script (`scripts/run_t6_g1_report.py` path) at the pre-registered thresholds; (e) record interim + final verdicts in `docs/WS1_G1_REPORT.md` (updates on data, one-shot rule honored).
+- **Overlapping timelines:** the OJ paper harness runs **60 days** from 2026-08-12 (~2026-10-11); the WS-5 SLO window runs **30 days** from 2026-08-14 → 2026-09-13. The SLO window closes first (Phase C); the harness continues past it (Phase B/D). The two measure different things (API uptime vs. signal skill).
 - **Exit:** N ≥ 8 with a statistical verdict, or a documented pivot to cat-bond / reinsurance / pure-data analytics (pre-registered in the G1 decision + WS-1 blueprint §4 T6).
 
 ### WS-7 — Distribution & GTM (runs in parallel)
@@ -100,7 +111,7 @@ it:
 - [ ] Backfill ongoing as-published GFS cycles into `data/ws2/ingested/`.
 - [ ] Monitor N growth; run the pre-registered G1 re-run at N ≥ 8.
 - [ ] Parallel: engage legal counsel (WS-8); draft warm-intro list (WS-7); baseline commit (WS-10).
-- **Exit:** G1 verdict on live+historical ledger (net-of-benchmark Sharpe, CI, p-value) **or** documented pivot. **This gates all spend on the productized API.**
+- **Exit:** G1 **interim verdict** on live+historical ledger (net-of-benchmark Sharpe, CI, p-value) at N ≥ 8 — **or** documented pivot. The full G1 verdict (N ≥ ~30 + CI) may extend into Phase B. **This gates all spend on the productized API.**
 
 ### Phase B — Live proof + first trials (Days 30–60)
 **Goal:** the API serves real, current signals; real tenants are onboarded.
@@ -169,7 +180,7 @@ runtime items this roadmap adds:
 | 3–14 | Warm-intro list for the wedge market; first outreach drafts (WS-7) | Founder |
 | 7–30 | Verify ingest → compute → signal → ledger daily; monitor N; draft G1 re-run at N ≥ 8 | Eng |
 | 14–30 | Public status page; publish methodology page; prepare the provenance-disclosed backtest asset (hold until G1 verdict) | Eng + Founder |
-| 30 | **G1 checkpoint**: verdict or pivot | Founder |
+| 30 | **G1 interim checkpoint** (N ≥ 8): verdict or pivot | Founder |
 
 ---
 

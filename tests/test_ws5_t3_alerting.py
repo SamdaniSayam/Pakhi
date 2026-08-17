@@ -55,14 +55,6 @@ EXPECTED_ALERTS = {
     "PakhiStripeSyncStale",
 }
 
-# deploy/observability/* (prometheus.yml, alert-rules.yml, grafana dashboards)
-# is private — it lives in Pakhi-private and is gitignored in the public tree.
-# These reconciliation tests can only run where the committed configs exist.
-_requires_obs = pytest.mark.skipif(
-    not (ROOT / "deploy" / "observability").exists(),
-    reason="deploy/observability is private (Pakhi-private)",
-)
-
 
 def _parse_rules() -> list[dict]:
     groups = yaml.safe_load(RULES_FILE.read_text())["groups"]
@@ -84,7 +76,6 @@ def _metric_names_in_expr(expr: str) -> list[str]:
     return names
 
 
-@_requires_obs
 def test_generated_configs_regenerate_byte_identical(tmp_path: Path) -> None:
     out = tmp_path / "out"
     proc = subprocess.run(
@@ -101,7 +92,6 @@ def test_generated_configs_regenerate_byte_identical(tmp_path: Path) -> None:
         )
 
 
-@_requires_obs
 def test_alert_rules_thresholds_equal_contract_twin() -> None:
     rules = {r["alert"]: r for r in _parse_rules()}
     assert set(rules) == EXPECTED_ALERTS
@@ -145,7 +135,6 @@ def test_alert_rules_thresholds_equal_contract_twin() -> None:
         assert rule["labels"]["severity"] in {"warning", "critical"}
 
 
-@_requires_obs
 def test_every_alert_consumes_a_contract_family() -> None:
     for rule in _parse_rules():
         used = set(_metric_names_in_expr(rule["expr"]))
@@ -156,7 +145,6 @@ def test_every_alert_consumes_a_contract_family() -> None:
         )
 
 
-@_requires_obs
 def test_prometheus_config_scrapes_api_and_loads_rules() -> None:
     cfg = yaml.safe_load(PROM_FILE.read_text())
     assert "alert-rules.yml" in cfg["rule_files"]
@@ -168,7 +156,6 @@ def test_prometheus_config_scrapes_api_and_loads_rules() -> None:
     assert cfg["global"]["evaluation_interval"]
 
 
-@_requires_obs
 def test_dashboard_references_only_contract_families() -> None:
     import json
 
@@ -187,11 +174,12 @@ def test_dashboard_references_only_contract_families() -> None:
     assert any("pakhi_error_budget_remaining_fraction" in e for e in exprs)
 
 
-@_requires_obs
 def test_docker_compose_provisions_observability() -> None:
     # The observability stack (deploy/observability/*) is private (Pakhi-private);
     # the volume mounts are only validated there. The compose *service* shape is
     # still public and checked below.
+    if not (ROOT / "deploy" / "observability").exists():
+        pytest.skip("deploy/observability is private (Pakhi-private)")
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
     services = compose["services"]
     assert "prometheus" in services and "grafana" in services

@@ -43,9 +43,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libopenblas-dev libgfortran5
       - name: Install pakhi
-        # The WS-3 API test suite needs the `api` extra (fastapi/httpx/websockets),
-        # which is intentionally not in `[all]`; install it for the test job.
-        run: pip install -e ".[all,api]"
+        # The WS-3 API test suite needs the `api` extra (fastapi/httpx/websockets)
+        # and the `obs` extra (prometheus_client, used by pakhi.ws5.metrics).
+        # Both are intentionally not in `[all]`; install them for the test job.
+        run: pip install -e ".[all,api,obs]"
       - name: Run tests
         run: pytest tests/ -v --tb=short --cov=pakhi --cov-report=xml
       - name: Secrets scan
@@ -69,7 +70,7 @@ jobs:
           python-version: "3.12"
       - name: Install pakhi + pip-audit
         run: |
-          pip install -e ".[all,api]"
+          pip install -e ".[all,api,obs]"
           pip install pip-audit
       - name: pip-audit (fail on known vulnerable deps)
         run: pip-audit --require-hashes || pip-audit

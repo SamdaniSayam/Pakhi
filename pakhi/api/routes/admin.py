@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from pakhi.ws4.audit_events import AuditSpec, query_audit
 from pakhi.ws4.deps import require_role
 from pakhi.ws4.service import (
+    DEFAULT_TENANT_ID,
     RefreshFailure,
     TenantNotFoundError,
     create_api_key,
@@ -47,6 +48,20 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 _VALID_ROLES = {"viewer", "operator", "admin"}
+
+
+def _resolve_scope_tenant_id(scope: TenantScope, requested: str | None) -> str | None:
+    """Cross-tenant read-leak guard for the per-tenant admin surfaces.
+
+    A non-root caller may only ever read its own tenant: any caller-supplied
+    ``tenant_id`` is ignored and the caller's scope tenant is forced.  The
+    internal admin tenant (``pakhi-internal``) may read an arbitrary tenant
+    (when one is requested) or, when no tenant is supplied, list *all*
+    tenants/keys — the intended admin capability.
+    """
+    if scope.tenant_id == DEFAULT_TENANT_ID:
+        return requested
+    return scope.tenant_id
 
 
 class TokenRequest(BaseModel):
@@ -201,9 +216,14 @@ def create_tenant(
 @router.get("/tenants")
 def tenants_list(
     request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1),
     scope: TenantScope = Depends(require_role("admin")),
 ):
-    return {"tenants": list_tenants(request.app.state.write_engine)}
+    effective = _resolve_scope_tenant_id(scope, tenant_id)
+    tenants = list_tenants(request.app.state.write_engine)
+    if effective is not None:
+        tenants = [t for t in tenants if t["id"] == effective]
+    return {"tenants": tenants, "tenant_id": effective}
 
 
 @router.post("/keys", status_code=201)
@@ -260,15 +280,16 @@ def revoke_key(
 @router.get("/keys")
 def keys_list(
     request: Request,
-    tenant_id: str = Query(min_length=1),
+    tenant_id: str | None = Query(default=None, min_length=1),
     scope: TenantScope = Depends(require_role("admin")),
 ):
     """Prefixes only — the raw key never leaves the create response."""
+    effective = _resolve_scope_tenant_id(scope, tenant_id)
     try:
-        keys = list_api_keys(request.app.state.write_engine, tenant_id=tenant_id)
+        keys = list_api_keys(request.app.state.write_engine, tenant_id=effective)
     except TenantNotFoundError as exc:
         raise _tenant_404(exc) from exc
-    return {"tenant_id": tenant_id, "keys": keys}
+    return {"tenant_id": effective, "keys": keys}
 
 
 @router.get("/audit")
@@ -282,12 +303,13 @@ def audit_list(
     scope: TenantScope = Depends(require_role("admin")),
 ):
     """Admin-only, paginated, filterable view of the tamper-evident chain."""
+    effective = _resolve_scope_tenant_id(scope, tenant_id)
     rows = query_audit(
         request.app.state.write_engine,
-        tenant_id=tenant_id,
+        tenant_id=effective,
         actor_id=actor_id,
         action=action,
         limit=limit,
         offset=offset,
     )
-    return {"audit": rows, "limit": limit, "offset": offset, "count": len(rows)}
+    return {"audit": rows, "tenant_id": effective, "limit": limit, "offset": offset, "count": len(rows)}

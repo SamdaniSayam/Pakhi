@@ -63,6 +63,16 @@ class TokenBucketLimiter:
         self._tokens: dict[str, float] = {}
         self._last_updated: dict[str, float] = {}
         self._lock = threading.Lock()
+        self._last_cleanup = time.time()
+
+    def _cleanup_expired(self, now: float) -> None:
+        """Periodic cleanup of expired tokens to prevent memory leaks."""
+        if now - self._last_cleanup > self.window_seconds * 2:
+            expired = [k for k, last in self._last_updated.items() if now - last > self.window_seconds]
+            for k in expired:
+                del self._last_updated[k]
+                self._tokens.pop(k, None)
+            self._last_cleanup = now
 
     def check(self, key: str) -> tuple[bool, int, int, int]:
         """Check rate limit for key. Returns (allowed, limit, remaining, reset_seconds)."""
@@ -71,6 +81,7 @@ class TokenBucketLimiter:
         fill_rate = capacity / float(self.window_seconds)
 
         with self._lock:
+            self._cleanup_expired(now)
             last = self._last_updated.get(key, now)
             tokens = self._tokens.get(key, capacity)
 
@@ -101,6 +112,7 @@ class TokenBucketLimiter:
         fill_rate = capacity / float(self.window_seconds)
 
         with self._lock:
+            self._cleanup_expired(now)
             last = self._last_updated.get(key, now)
             tokens = min(capacity, self._tokens.get(key, capacity) + (now - last) * fill_rate)
             remaining = int(tokens)
@@ -164,7 +176,7 @@ class AuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         # WS-5 T2: /metrics is unauthenticated, admin network only (contract
         # §3.2) — never 401/429, never quota consumption; network ACL is the
         # deployment's job, not a request header.
-        if request.url.path in ("/metrics", "/v1/health"):
+        if request.url.path in ("/metrics", "/v1/health", "/v1/billing/webhook"):
             return await call_next(request)
 
         key_header = request.headers.get("X-Pakhi-Key") or request.query_params.get("key")

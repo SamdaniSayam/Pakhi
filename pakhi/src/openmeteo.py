@@ -12,8 +12,11 @@ Example:
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import time
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -26,6 +29,23 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.open-meteo.com/v1"
 AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1"
+
+# Zero-cost dev mode: when PAKHI_MOCK_DATA is truthy, connectors serve static
+# fixtures instead of hitting the live API (respect free-tier rate limits).
+_MOCK_ENABLED = os.environ.get("PAKHI_MOCK_DATA", "").lower() in ("1", "true", "yes", "on")
+_MOCK_DIR = Path(os.environ.get("PAKHI_MOCK_DATA_DIR", "data/sample/mock"))
+
+
+def _mock_load_url(url: str) -> Any:
+    """Load a static fixture for ``url`` (path portion -> ``<path>.json``)."""
+    path_part = url.split("//", 1)[1].split("?", 1)[0].replace("/", "_")
+    path = _MOCK_DIR / f"{path_part}.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"PAKHI_MOCK_DATA enabled but missing fixture: {path}. "
+            f"Download it once and place it under {_MOCK_DIR}."
+        )
+    return json.loads(path.read_text())
 
 FORECAST_VARIABLES = [
     "temperature_2m",
@@ -163,6 +183,8 @@ class OpenMeteoConnector:
 
     def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         """Make a GET request with retry logic."""
+        if _MOCK_ENABLED:
+            return _mock_load_url(url)
         params.update(
             {
                 "temperature_unit": self.temperature_unit,

@@ -16,6 +16,13 @@ def _make_data(n=200):
 
 
 class TestGradientForecaster:
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        try:
+            import lightgbm  # noqa: F401
+        except ImportError:
+            pytest.skip("lightgbm not installed")
+
     def test_init_default(self):
         model = GradientForecaster()
         assert model is not None

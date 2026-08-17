@@ -19,8 +19,8 @@ def test_maps_has_cartopy(monkeypatch):
         m.setitem(sys.modules, "cartopy.feature", MagicMock())
 
         # We have to also patch ccrs and cfeature inside maps
-        monkeypatch.setattr(maps, "ccrs", sys.modules["cartopy.crs"])
-        monkeypatch.setattr(maps, "cfeature", sys.modules["cartopy.feature"])
+        monkeypatch.setattr(maps, "ccrs", sys.modules["cartopy.crs"], raising=False)
+        monkeypatch.setattr(maps, "cfeature", sys.modules["cartopy.feature"], raising=False)
 
         # Mock Figure to avoid matplotlib trying to interpret the mock projection
         mock_fig = MagicMock()

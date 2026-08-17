@@ -14,9 +14,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from pakhi.ws4.contract import default_tenant_id
+
 # Locked contract §3: the default tenant existing WS-3 ``client_id`` semantics
 # migrate under, and the machine-key default grant.
-DEFAULT_TENANT_ID = "pakhi-internal"
+DEFAULT_TENANT_ID = default_tenant_id()  # locked twin §tenancy (single source of truth)
 DEFAULT_MACHINE_ROLES = ("operator",)
 
 _ROLE_RANK = {"viewer": 0, "operator": 1, "admin": 2}
@@ -40,7 +42,9 @@ class TenantScope:
 
     def has_role(self, role: str) -> bool:
         """True when this scope carries ``role`` (or a superset of it)."""
-        return _ROLE_RANK.get(role, -1) <= _ROLE_RANK.get(_top_role(self.roles), -1)
+        if role not in _ROLE_RANK:
+            return False
+        return _ROLE_RANK[role] <= _ROLE_RANK.get(_top_role(self.roles), -1)
 
     def can(self, *required: str) -> bool:
         """True when this scope satisfies at least one of the required roles."""

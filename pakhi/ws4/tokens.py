@@ -16,12 +16,17 @@ from typing import Any
 import jwt
 from jwt import InvalidTokenError
 
-ACCESS_TOKEN_TTL_MINUTES = 15
+from pakhi.ws4.contract import access_algorithm, access_token_ttl_minutes
+
+ACCESS_TOKEN_TTL_MINUTES = access_token_ttl_minutes()  # locked twin §identity
 REFRESH_TOKEN_TTL_DAYS = 30
-ACCESS_ALGORITHM = "HS256"
+ACCESS_ALGORITHM = access_algorithm()  # locked twin §identity (single source of truth)
 
 GENESIS_ISSUER = "pakhi"
 _ISSUER = GENESIS_ISSUER
+
+# Locked role set (contract §4). Tokens must not carry roles outside this set.
+_ALLOWED_ROLES = frozenset({"viewer", "operator", "admin"})
 
 
 def hash_token(token: str) -> str:
@@ -72,8 +77,12 @@ def decode_access_token(token: str, secret: str, issuer: str = _ISSUER) -> dict[
 
 def claims_to_roles(claims: dict[str, Any]) -> list[str]:
     """Validate/normalize the ``roles`` claim (must be a non-empty list of
-    strings, superset-free of the locked role set)."""
+    strings drawn from the locked role set; unknown roles are dropped so a
+    token can never smuggle in a privilege the contract does not define)."""
     roles = claims.get("roles")
     if not isinstance(roles, list) or not roles or not all(isinstance(r, str) for r in roles):
         raise InvalidTokenError("invalid roles claim")
-    return list(roles)
+    allowed = [r for r in roles if r in _ALLOWED_ROLES]
+    if not allowed:
+        raise InvalidTokenError("invalid roles claim")
+    return list(dict.fromkeys(allowed))

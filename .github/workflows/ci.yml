@@ -59,6 +59,21 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  supply-chain:
+    name: Supply chain (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pakhi + pip-audit
+        run: |
+          pip install -e ".[all,api]"
+          pip install pip-audit
+      - name: pip-audit (fail on known vulnerable deps)
+        run: pip-audit --require-hashes || pip-audit
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest

@@ -185,7 +185,7 @@ def _sortino(returns: np.ndarray, risk_free_rate: float = 0.02) -> float:
     downside = excess[excess < 0]
     if len(downside) == 0:
         return 0.0
-    downside_std = np.sqrt(np.mean(downside**2))
+    downside_std = np.sqrt(np.sum(downside**2) / len(returns))
     if downside_std < 1e-15:
         return 0.0
     return float(mu / downside_std * np.sqrt(252))

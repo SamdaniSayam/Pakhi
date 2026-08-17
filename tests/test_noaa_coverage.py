@@ -82,6 +82,11 @@ def test_noaa_fallback_direct(monkeypatch, tmp_path):
 
 
 def test_open_grib_fallback(monkeypatch, tmp_path):
+    try:
+        import cfgrib  # noqa: F401
+    except ImportError:
+        pytest.skip("cfgrib not installed")
+
     gfs = GFSConnector()
 
     # We want it to fail the first open_dataset, and succeed the second

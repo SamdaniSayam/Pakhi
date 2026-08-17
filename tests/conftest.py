@@ -99,3 +99,56 @@ def daily_returns() -> np.ndarray:
     """Array of 252 synthetic daily returns."""
     rng = np.random.default_rng(123)
     return rng.normal(0.0005, 0.01, 252)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Prevent PyTorch/ONNX teardown core dumps on interpreter shutdown.
+
+    PyTorch + ONNX install C++ global state whose *static destructors* can
+    segfault during ``Py_Finalize`` (a known Dynamo/ONNX artifact) once the ML
+    stack has been loaded. We clear the JIT registry / ONNX caches here, then
+    register an ``atexit`` handler that forces a clean process exit *after*
+    pytest has printed its terminal summary but *before* the broken C++
+    destructor teardown would dump core and make CI report a non-zero exit.
+
+    The original pass/fail ``exitstatus`` is preserved, so real failures still
+    propagate. Runs that never import torch exit normally.
+    """
+    import atexit
+    import os
+    import sys
+
+    if "torch" not in sys.modules:
+        return
+
+    import torch
+
+    if hasattr(torch._C, "_jit_clear_class_registry"):
+        try:
+            torch._C._jit_clear_class_registry()
+        except Exception:
+            pass
+    for modname in ("torch.onnx", "onnx"):
+        if modname in sys.modules:
+            try:
+                sys.modules.pop(modname, None)
+            except Exception:
+                pass
+
+    def _clean_exit():
+        # Flush buffered output, then bypass the segfaulting C++ teardown.
+        try:
+            import logging
+
+            for handler in logging.root.handlers:
+                handler.flush()
+        except Exception:
+            pass
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.flush()
+            except Exception:
+                pass
+        os._exit(int(exitstatus))
+
+    atexit.register(_clean_exit)

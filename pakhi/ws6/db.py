@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String
+from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, UniqueConstraint
 
 from pakhi.ws2.db import Base
 
@@ -40,6 +40,15 @@ class MeteringRollup(Base):
     backtest_hours = Column(Float, nullable=False, default=0.0)
     chain_events = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "period_start",
+            "period_end",
+            name="uq_metering_rollup_tenant_period",
+        ),
+    )
 
 
 class MeteringSuspension(Base):

@@ -91,6 +91,26 @@ def calibration_error(
     if n_bins == 0:
         return 0.0
 
+    # If raw (prediction, binary outcome) pairs are supplied, bin the
+    # predictions and compute the Expected Calibration Error (ECE) weighted by
+    # the number of samples in each bin.
+    if len(pred) == len(obs) and np.all((obs == 0) | (obs == 1)):
+        bins = np.linspace(0.0, 1.0, max(1, n_bins) + 1)
+        bin_idx = np.clip(np.digitize(pred, bins) - 1, 0, max(1, n_bins) - 1)
+        total = 0.0
+        total_w = 0
+        for b in range(max(1, n_bins)):
+            m = bin_idx == b
+            w = int(np.sum(m))
+            if w > 0:
+                pred_b = float(np.mean(pred[m]))
+                obs_b = float(np.mean(obs[m]))
+                total += w * abs(pred_b - obs_b)
+                total_w += w
+        return float(total / total_w) if total_w > 0 else np.nan
+
+    # Otherwise treat inputs as already-aggregated per-bin (predicted,
+    # observed) values and return the mean absolute error across bins.
     return float(np.mean(np.abs(pred - obs)))
 
 

@@ -15,6 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from pakhi.api.auth import hash_key
 from pakhi.api.broadcast import broadcaster
+from pakhi.ws4.service import lookup_key
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,27 @@ router = APIRouter(prefix="/v1", tags=["stream"])
 async def stream_signals(websocket: WebSocket):
     """Live WebSocket stream for signal batches."""
     # HTTP middleware does not wrap WebSocket routes, so the same key policy as
-    # AuthAndRateLimitMiddleware is enforced here (presence + valid hash).
+    # AuthAndRateLimitMiddleware is enforced here (presence + valid hash), PLUS
+    # DB per-tenant keys (WS-4 T2) — a valid pk_live_… DB key must also connect.
     require_auth = getattr(websocket.app.state, "require_auth", False)
     allowed_hashes = getattr(websocket.app.state, "api_key_hashes", set()) or set()
     key_header = websocket.headers.get("X-Pakhi-Key") or websocket.query_params.get("key")
-    if require_auth and (not key_header or hash_key(key_header) not in allowed_hashes):
+
+    def _key_accepted(raw_key: str | None) -> bool:
+        if not raw_key:
+            return False
+        hashed = hash_key(raw_key)
+        if allowed_hashes and hashed in allowed_hashes:
+            return True
+        engine = getattr(websocket.app.state, "write_engine", None)
+        if engine is not None:
+            try:
+                return lookup_key(engine, hashed) is not None
+            except Exception:
+                return False
+        return False
+
+    if require_auth and not _key_accepted(key_header):
         await websocket.close(code=1008, reason="unauthorized: invalid or missing X-Pakhi-Key")
         return
 

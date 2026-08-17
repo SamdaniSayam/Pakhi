@@ -153,6 +153,11 @@ def test_ensemble_predict_fail():
 
 # 8. gradient.py
 def test_gradient_early_stopping():
+    try:
+        import lightgbm
+    except ImportError:
+        pytest.skip("lightgbm not installed")
+
     model = GradientForecaster(n_estimators=100, early_stopping_rounds=2)
     # Give it random data, early stopping should trigger
     X = np.random.rand(100, 5)

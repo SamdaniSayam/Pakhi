@@ -61,7 +61,7 @@ class Ws4AuditMiddleware(BaseHTTPMiddleware):
             tenant_id=(scope.tenant_id if scope is not None else "pakhi-internal"),
             actor_id=(scope.actor_id if scope is not None else "-"),
             action="read",
-            resource=request.url.path,
+            resource=_route_template(request),
             outcome="success",
             payload={"status": response.status_code},
         )
@@ -76,3 +76,16 @@ def _is_read(path: str) -> bool:
     if path.startswith(("/v1/admin", "/v1/health")):
         return False
     return path.startswith(_READ_PREFIXES)
+
+
+def _route_template(request: Request) -> str:
+    """Route template for the audited read (no user-supplied path segments).
+
+    Storing the raw path would persist tenant/account identifiers (PII-ish) from
+    the URL; the matched route template (``/v1/signals/{instrument}``) is the
+    audited resource instead. Falls back to the raw path only when no route was
+    matched (true 404s), which never carries a resolved identity anyway.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    return template if template else request.url.path

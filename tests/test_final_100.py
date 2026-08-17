@@ -798,6 +798,15 @@ class TestGradientCoverage:
 class TestLSTMCoverage:
     """Cover lstm.py lines 46-47, 186, 188, 382-383, 385, 394, 484-485, 564, 577."""
 
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        try:
+            import torch  # noqa: F401
+            self.has_torch = True
+        except ImportError:
+            self.has_torch = False
+
+
     def test_import_torch_error(self):
         with patch.dict(sys.modules, {"torch": None}):
             from pakhi.models import lstm
@@ -806,6 +815,8 @@ class TestLSTMCoverage:
                 lstm._lazy_torch()
 
     def test_export_onnx_not_fitted(self):
+        if getattr(self, "has_torch", False) is False:
+            pytest.skip("torch not installed")
         from pakhi.models.lstm import LSTMForecaster
 
         f = LSTMForecaster.__new__(LSTMForecaster)
@@ -814,6 +825,8 @@ class TestLSTMCoverage:
             f.export_onnx("/tmp/model.onnx")
 
     def test_export_onnx_success(self):
+        if getattr(self, "has_torch", False) is False:
+            pytest.skip("torch not installed")
         from pakhi.models.lstm import LSTMForecaster
 
         f = LSTMForecaster(
@@ -826,6 +839,8 @@ class TestLSTMCoverage:
         assert tmp.exists()
 
     def test_predict_empty(self):
+        if getattr(self, "has_torch", False) is False:
+            pytest.skip("torch not installed")
         from pakhi.models.lstm import LSTMForecaster
 
         f = LSTMForecaster(

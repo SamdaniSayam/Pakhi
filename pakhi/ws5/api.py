@@ -83,6 +83,7 @@ class MetricsMiddleware:
                 template,
                 edge_status,
                 duration,
+                fail_closed=bool(getattr(request.state, "ws5_fail_closed", False)),
             )
             # SLO-1 accounting: feed every edge 5xx to the error-budget ledger
             # (Redis fail-closed 503s tagged by AuthAndRateLimitMiddleware so

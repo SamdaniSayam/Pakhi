@@ -8,8 +8,14 @@ Targets coverage gaps in:
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from unittest.mock import MagicMock, patch
+
+
+def _have(module: str) -> bool:
+    """Detect whether a dependency is actually importable in this environment."""
+    return importlib.util.find_spec(module) is not None
 
 import matplotlib
 
@@ -173,7 +179,7 @@ class TestDashboardWithRich:
         from pakhi.viz.dashboard import TerminalDashboard
 
         d = TerminalDashboard(use_plotext=False)
-        if d._console is None:
+        if not _have("rich"):
             pytest.skip("rich not installed")
 
         # Should not raise
@@ -186,7 +192,7 @@ class TestDashboardWithRich:
         from pakhi.viz.dashboard import TerminalDashboard
 
         d = TerminalDashboard(use_plotext=False)
-        if d._console is None:
+        if not _have("rich"):
             pytest.skip("rich not installed")
         signals = [
             {
@@ -203,7 +209,7 @@ class TestDashboardWithRich:
         from pakhi.viz.dashboard import TerminalDashboard
 
         d = TerminalDashboard(use_plotext=False)
-        if d._console is None:
+        if not _have("rich"):
             pytest.skip("rich not installed")
         d.display_forecast_table(
             [
@@ -476,7 +482,7 @@ class TestPlotForecastMap:
         """Test cartopy path if cartopy is available."""
         from pakhi.viz import maps as maps_mod
 
-        if not maps_mod._HAS_CARTOPY:
+        if not _have("cartopy"):
             pytest.skip("cartopy not installed")
         data = np.random.default_rng(2).random((8, 12))
         fig = maps_mod.plot_forecast_map(data, title="Cartopy Map")
@@ -486,7 +492,7 @@ class TestPlotForecastMap:
     def test_track_cartopy_path(self):
         from pakhi.viz import maps as maps_mod
 
-        if not maps_mod._HAS_CARTOPY:
+        if not _have("cartopy"):
             pytest.skip("cartopy not installed")
         fig = maps_mod.plot_track(
             cone_lats=np.array([10, 12, 14, 12, 10]),

@@ -27,6 +27,7 @@ from pakhi.api.db import build_engine
 from pakhi.api.logcfg import RequestContextMiddleware, setup_logging
 from pakhi.api.routes.admin import router as admin_router
 from pakhi.api.routes.backtest import router as backtest_router
+from pakhi.api.routes.billing import router as billing_router
 from pakhi.api.routes.meta import router as meta_router
 from pakhi.api.routes.read import router as read_router
 from pakhi.api.routes.stream import router as stream_router
@@ -79,7 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from pakhi.ws5.redis_limiter import build_tier_limiters
 
     tier_limiters, redis_client = build_tier_limiters(
-        TIER_LIMIT_PER_MIN, redis_url=settings.redis_url
+        TIER_LIMIT_PER_MIN, redis_url=settings.redis_url, workers=settings.workers
     )
 
     # WS-5 T2: Prometheus registry (multiprocess-mandatory above one worker —
@@ -108,6 +109,60 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.redis_url = settings.redis_url
         app.state.redis_client = redis_client
         app.state.workers = settings.workers
+
+        # WS-5 T2: wire the scrape-time collector so /metrics reflects the live
+        # store/state (audit chain, latest cycle, DB pool, error budget) instead
+        # of only whatever /v1/status last wrote — the Prometheus source of
+        # truth. Re-evaluated on every scrape (never cached/stale).
+        def _ws5_scrape_provider() -> dict:
+            result: dict = {}
+            write_engine = app.state.write_engine
+            read_engine = app.state.read_engine
+            if write_engine is not None:
+                try:
+                    from pakhi.ws4.audit_events import verify_chain_in_store
+
+                    ok, _ = verify_chain_in_store(write_engine)
+                    result["audit_chain_ok"] = 1.0 if ok else 0.0
+                except Exception:
+                    result["audit_chain_ok"] = 0.0
+            if read_engine is not None:
+                import datetime as _dt
+
+                try:
+                    from sqlalchemy import desc, select
+
+                    from pakhi.ws2.db import ForecastCycle
+                    from pakhi.ws5.contract import cycle_period_seconds
+
+                    with read_engine.connect() as conn:
+                        row = conn.execute(
+                            select(ForecastCycle.publication_ts)
+                            .order_by(desc(ForecastCycle.publication_ts))
+                            .limit(1)
+                        ).first()
+                    if row is not None:
+                        pub = row[0]
+                        if pub.tzinfo is None:
+                            pub = pub.replace(tzinfo=_dt.timezone.utc)
+                        now = _dt.datetime.now(_dt.timezone.utc)
+                        fresh = (now - pub).total_seconds()
+                        result["cycle_freshness_seconds"] = float(fresh)
+                        result["cycle_status"] = (
+                            1.0 if fresh <= cycle_period_seconds() else 0.0
+                        )
+                        result["cycle_last_ok_timestamp_seconds"] = float(pub.timestamp())
+                except Exception:
+                    pass
+                try:
+                    pool = read_engine.pool
+                    result["db_pool_in_use"] = float(pool.checkedout())
+                    result["db_pool_max"] = float(pool.size())
+                except Exception:
+                    pass
+            return result
+
+        ws5_metrics.set_scrape_provider(_ws5_scrape_provider)
 
         # Create WS-2 + WS-4 tables on the write engine (idempotent; sqlite in
         # tests, TimescaleDB in deployment), then run one-shot additive
@@ -204,6 +259,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(backtest_router)
     app.include_router(stream_router)
     app.include_router(admin_router)
+    app.include_router(billing_router)
     from pakhi.ws5.api import router as ws5_router
 
     app.include_router(ws5_router)

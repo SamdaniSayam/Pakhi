@@ -39,6 +39,7 @@ from pakhi.ws2.ingest import (
     LIVE_MANIFEST,
     MARKET,
     IngestError,
+    RejectCycleError,
     ingest_cycle,
 )
 
@@ -183,6 +184,27 @@ def orchestrate_cycle(
                 engine=engine,
                 episode_id=_episode_id_for(engine, ingested["forecast_cycle_id"], episode_id),
             )
+        except RejectCycleError as exc:
+            # Designed loud skip: a firing cycle whose fill/exit session has
+            # no realized OJ close (the live OJ feed lags the cycle date) is
+            # rejected — never a fabricated fill, never a critical crash.
+            record["status"] = CycleOutcome.REJECTED
+            record["reject"] = {"type": type(exc).__name__, "error": str(exc)}
+            if "missing OJ close" in str(exc):
+                logger.warning(
+                    "cycle %s REJECTED: OJ market feed lags the cycle date — no "
+                    "realized close to fill/exit on; skipping without fabricating a fill",
+                    cycle_date,
+                )
+                _alert(
+                    "ERROR",
+                    f"cycle {cycle_date} rejected: {type(exc).__name__}",
+                    cycle_date,
+                    record["reject"],
+                    notifiers,
+                )
+                structured_log(record, log_sink)
+                return record
         except Exception as exc:
             record["status"] = CycleOutcome.FAILED
             record["failure"] = {"type": type(exc).__name__, "error": str(exc)}

@@ -113,7 +113,10 @@ class EnsembleSignal(BaseSignal):
             consensus = Action.SHORT
 
         corr_adjustment = 1.0 - self.correlation_penalty * (1.0 - agreement)
-        weighted_conf = float(np.average(confidences, weights=confidences))
+        # Average confidence with uniform (non-squared) weighting so that
+        # high-confidence members do not dominate the weighting (using the
+        # confidences themselves as weights would weight by confidence**2).
+        weighted_conf = float(np.mean(confidences))
         weighted_conf *= corr_adjustment
 
         avg_conf = float(np.mean(confidences))

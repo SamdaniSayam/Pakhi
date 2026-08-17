@@ -197,7 +197,16 @@ def significance_report(
             "_cost": COST,
         }
 
-    nb = trades["net_of_benchmark"].to_numpy(dtype=np.float64)
+    # When a caller-supplied benchmark mean is given (e.g. a live/independent
+    # rbar) AND the raw gross returns are available, recompute the
+    # net-of-benchmark series from gross with the same 30 bps COST the WS-2
+    # worker uses, so the Sharpe / CI / decision reflect that benchmark.
+    # Backward-compatible: otherwise use the stored ``net_of_benchmark`` column
+    # (the backtest-frozen value).
+    if benchmark_mean is not None and "gross" in trades.columns:
+        nb = (trades["gross"] - COST - benchmark_mean).to_numpy(dtype=np.float64)
+    else:
+        nb = trades["net_of_benchmark"].to_numpy(dtype=np.float64)
     n = len(nb)
     sharpe = annualized_sharpe(nb, span_years)
     ci_lo, ci_hi = bootstrap_ci(nb, span_years)

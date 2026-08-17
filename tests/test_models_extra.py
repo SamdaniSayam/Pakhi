@@ -382,6 +382,13 @@ class TestGaussianForecaster:
 
 
 class TestLSTMForecaster:
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            pytest.skip("torch not installed")
+
     def _make_data(self, n=200, features=4):
         rng = np.random.RandomState(42)
         X = rng.randn(n, features).astype(np.float32)

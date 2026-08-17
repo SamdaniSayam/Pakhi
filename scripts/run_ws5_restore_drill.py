@@ -221,13 +221,20 @@ def run_drill(
         if backup_file is None:
             tool = base_snapshot(source_url, base)
             state = ledger_state(source_url)
+            # Actually run the integrity gate instead of hardcoding True: the
+            # drill must refuse to back up an untrusted store, so record the
+            # real chain-verification result in the manifest.
+            try:
+                chain_ok, _first_bad = verify_chain_in_store(create_engine(source_url))
+            except Exception:
+                chain_ok, _first_bad = False, None
             manifest = {
                 "backup_id": "drill",
                 "created_utc": datetime.now(timezone.utc).isoformat(),
                 "source": {"dialect": dialect(source_url), "url": source_url},
                 "base": {"file": base.name, "size_bytes": base.stat().st_size, "tool": tool},
                 "ledger": state,
-                "verify_chain_before_backup": True,
+                "verify_chain_before_backup": bool(chain_ok),
                 "targets": {
                     "rpo_cycles": rpo_cycles(),
                     "rto_hours": rto_hours(),

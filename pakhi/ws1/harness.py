@@ -22,6 +22,7 @@ and no G1 inference is drawn here (that gate is T6).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -280,8 +281,18 @@ def run_harness(
     sessions = oj.index
 
     if armor:
+        # Enforce the vintage hash-drift layer on the real pipeline (T1/T4/T6):
+        # when PAKHI_GFS_DIR is set (or data/gfs exists) recompute per-cycle
+        # archive hashes and compare to the pinned manifest. Without this the
+        # dedicated run_t3_armor.py path was the only one enforcing drift.
+        gfs_dir = os.environ.get("PAKHI_GFS_DIR")
+        if gfs_dir is None:
+            from pakhi.ws1.armor import GFS
+
+            gfs_dir = str(GFS) if GFS.exists() else None
         report["armor"] = run_armor(
-            pit, sessions, manifest=vintage_manifest, oj=oj, calendar=calendar
+            pit, sessions, manifest=vintage_manifest, oj=oj, calendar=calendar,
+            gfs_dir=gfs_dir,
         )
 
     benchmark = benchmark_2sess(pit)

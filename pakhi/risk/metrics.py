@@ -127,7 +127,9 @@ def sortino_ratio(returns: np.ndarray, risk_free_rate: float = 0.02) -> float:
     downside = excess[excess < 0]
     if len(downside) == 0:
         return np.nan
-    downside_std = np.sqrt(np.mean(downside**2))
+    # Use total N (not just downside count) to match the Sortino definition in
+    # pakhi/trading/pnl.py so the two implementations agree.
+    downside_std = np.sqrt(np.sum(downside**2) / len(r))
     if downside_std < 1e-15:
         return np.nan
     return float(mu / downside_std * np.sqrt(252))

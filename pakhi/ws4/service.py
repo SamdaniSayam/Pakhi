@@ -387,19 +387,20 @@ def revoke_api_key(engine: Engine, *, key_id: str, audit: AuditSpec | None = Non
         return True
 
 
-def list_api_keys(engine: Engine, *, tenant_id: str) -> list[dict]:
-    """Prefixes only — the raw key never leaves the create response."""
+def list_api_keys(engine: Engine, *, tenant_id: str | None = None) -> list[dict]:
+    """Prefixes only — the raw key never leaves the create response.
+
+    When ``tenant_id`` is ``None`` (root admin listing without a scope) every
+    tenant's keys are returned.
+    """
     from pakhi.ws4.db import ApiKey
 
     with Session(engine) as session:
-        _tenant_row(engine, tenant_id, session)
-        rows = (
-            session.execute(
-                select(ApiKey).where(ApiKey.tenant_id == tenant_id).order_by(ApiKey.created_at)
-            )
-            .scalars()
-            .all()
-        )
+        stmt = select(ApiKey).order_by(ApiKey.created_at)
+        if tenant_id is not None:
+            _tenant_row(engine, tenant_id, session)
+            stmt = stmt.where(ApiKey.tenant_id == tenant_id)
+        rows = session.execute(stmt).scalars().all()
     return [
         {
             "key_id": k.id,

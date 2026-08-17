@@ -92,7 +92,8 @@ def km_to_latlon(
     lon = np.asarray(lon, dtype=np.float64)
 
     new_lat = lat + (dk_lat_km / _EARTH_RADIUS_KM) * (180.0 / math.pi)
-    new_lon = lon + (dk_lon_km / (_EARTH_RADIUS_KM * np.cos(np.radians(lat)))) * (180.0 / math.pi)
+    cos_lat = np.maximum(np.cos(np.radians(lat)), 1e-10)
+    new_lon = lon + (dk_lon_km / (_EARTH_RADIUS_KM * cos_lat)) * (180.0 / math.pi)
 
     return float(new_lat) if new_lat.ndim == 0 else new_lat, float(
         new_lon

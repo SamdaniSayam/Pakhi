@@ -93,7 +93,7 @@ def solar_position(
     hour = datetime_utc.hour + datetime_utc.minute / 60.0 + datetime_utc.second / 3600.0
     LSTM = 15.0 * round(longitude / 15.0)  # Local Standard Time Meridian from longitude
     TC = 4.0 * (longitude - LSTM) + EoT  # time correction (minutes)
-    LST = hour + TC / 60.0  # local solar time (hours)
+    LST = (hour + TC / 60.0) % 24.0  # local solar time (hours)
     HRA = math.radians(15.0 * (LST - 12.0))  # hour angle (radians)
 
     # Solar zenith angle

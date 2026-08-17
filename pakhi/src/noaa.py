@@ -311,11 +311,28 @@ class GFSConnector:
         raise ConnectionError(f"Failed to fetch byte range from {url}") from last_exc
 
     def _subset_bbox(self, ds: xr.Dataset) -> xr.Dataset:
-        """Subset a full-grid Dataset to the configured bounding box."""
+        """Subset a full-grid Dataset to the configured bounding box.
+
+        Handles both ``[0, 360)`` and ``[-180, 180]`` longitude grids by
+        normalising the requested bbox into the grid's own convention before
+        slicing, so the default US bbox works regardless of grid orientation.
+        """
         w, s, e, n = self.bbox
         if "longitude" in ds.coords:
-            lon0, lon1 = (w, e) if w >= 0 else (w + 360, e + 360)
-            ds = ds.sel(longitude=slice(lon0, lon1))
+            lon = np.asarray(ds["longitude"].values, dtype=np.float64)
+            grid_is_360 = bool(lon.size > 0 and lon.min() >= 0)
+            # Normalise the requested bbox to the grid's longitude convention.
+            if grid_is_360:
+                lon0, lon1 = w % 360, e % 360
+            else:
+                # Normalise a [0, 360) bbox into the [-180, 180] grid convention.
+                lon0, lon1 = ((w + 180) % 360) - 180, ((e + 180) % 360) - 180
+            if lon0 <= lon1:
+                ds = ds.sel(longitude=slice(lon0, lon1))
+            else:
+                ds = ds.sel(
+                    longitude=((ds["longitude"] >= lon0) | (ds["longitude"] <= lon1))
+                )
         if "latitude" in ds.coords:
             lat = ds.latitude.values
             descending = len(lat) > 1 and lat[0] > lat[-1]

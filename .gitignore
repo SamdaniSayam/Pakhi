@@ -88,3 +88,32 @@ docker-compose.override.yml
 .env
 .env.local
 .env.production
+.env.*
+*.tfvars
+*.tfvars.json
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.key.pub
+credentials*.json
+secrets*.json
+*.secret
+
+# Private / proprietary infrastructure & trading logic → keep in Pakhi-private
+terraform/
+deploy/
+docker/
+docker-compose.yml
+scripts/run_paper_trading.py
+docker-compose.override.yml
+
+# Licensed / proprietary market data
+data/market/
+
+# Build artifact
+uv_install.log
+
+# Local staging of private files (never committed)
+private-staging

@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from pakhi.ws2.db import BacktestJob
 from pakhi.ws4.db import AuditEvent, Tenant
+from pakhi.ws6.contract import never_billed as _never_billed
 from pakhi.ws6.db import MeteringRollup
 
 # Internal bookkeeping rows that are audit rows but never API calls. The
@@ -55,6 +56,11 @@ INTERNAL_ACTIONS = frozenset(
         "onboarding.tenant_provisioned",
     }
 )
+
+# Access-log actions that are never billable (contract §2). The chain already
+# excludes pre-filtered 4xx/5xx/503, but bill on the twin's never-billed set
+# defensively so a stray action string can never become a billable API call.
+_EXCLUDED_ACTIONS = INTERNAL_ACTIONS | frozenset(_never_billed())
 
 DEFAULT_TENANT_ID = "pakhi-internal"
 _MIN_FEED_HOURS = 1.0  # contract: sessions < 1 h contribute 0; hours floored
@@ -91,7 +97,7 @@ def api_calls_by_tenant(events: Iterable[AuditEvent]) -> dict[str, int]:
     """Billable API calls per tenant: chain rows minus internal actions."""
     counts: dict[str, int] = {}
     for ev in events:
-        if ev.action in INTERNAL_ACTIONS:
+        if ev.action in _EXCLUDED_ACTIONS:
             continue
         tenant = ev.tenant_id or DEFAULT_TENANT_ID
         counts[tenant] = counts.get(tenant, 0) + 1
@@ -99,32 +105,59 @@ def api_calls_by_tenant(events: Iterable[AuditEvent]) -> dict[str, int]:
 
 
 def feed_hours_by_tenant(engine, start: str, end: str) -> dict[str, float]:
-    """Billable feed hours per tenant from paired connect/disconnect rows."""
-    sessions: dict[tuple[str, str], list[datetime]] = {}
+    """Billable feed hours per tenant from paired connect/disconnect rows.
+
+    Connect/disconnect stamps are paired GLOBALLY per ``session_id`` across the
+    whole history (not per-day), so a session that crosses the period boundary
+    (e.g. midnight) is attributed to the part of its lifetime that overlaps the
+    period — otherwise each daily rollup sees a single (odd) stamp, the pair is
+    dropped, and the session is billed 0 hours in every period.
+    """
+    start_dt = _iso(start)
+    end_dt = _iso(end)
     with engine.connect() as conn:
         rows = conn.execute(
             select(AuditEvent).where(
-                AuditEvent.action.in_(["feed.connect", "feed.disconnect"]),
-                AuditEvent.ts >= start,
-                AuditEvent.ts < end,
+                AuditEvent.action.in_(["feed.connect", "feed.disconnect"])
             )
         ).all()
+    sessions: dict[tuple[str, str], list[tuple[str, datetime]]] = {}
     for ev in rows:
         key = (ev.tenant_id or DEFAULT_TENANT_ID, str((ev.payload or {}).get("session_id", "")))
-        sessions.setdefault(key, []).append(_iso(ev.ts))
+        sessions.setdefault(key, []).append((ev.action, _iso(ev.ts)))
     hours: dict[str, float] = {}
-    for (tenant, _sid), stamps in sessions.items():
+    for (tenant, _sid), events in sessions.items():
+        events.sort(key=lambda e: e[1])
+        open_connects: list[datetime] = []
         total = 0.0
-        for i in range(0, len(stamps) - 1, 2):
-            delta = (stamps[i + 1] - stamps[i]).total_seconds() / 3600.0
-            total += max(0.0, int(delta)) if delta >= _MIN_FEED_HOURS else 0.0
+        for action, ts in events:
+            if action == "feed.connect":
+                open_connects.append(ts)
+                continue
+            if not open_connects:
+                continue
+            connect = open_connects.pop(0)
+            overlap_start = max(connect, start_dt)
+            overlap_end = min(ts, end_dt)
+            if overlap_end > overlap_start:
+                delta_h = (overlap_end - overlap_start).total_seconds() / 3600.0
+                if delta_h >= _MIN_FEED_HOURS:
+                    total += int(delta_h)
         if total > 0:
             hours[tenant] = hours.get(tenant, 0.0) + total
     return hours
 
 
 def backtest_hours_by_tenant(engine, start: str, end: str) -> dict[str, float]:
-    """Billable compute hours per tenant from completed backtest jobs."""
+    """Billable compute hours per tenant from completed backtest jobs.
+
+    A job is attributed by the OVERLAP of its ``[started, finished]`` interval
+    with the period (clamped to ``[start, end)``), so a job that started before
+    ``start`` but finished inside the window is billed for the in-window portion
+    instead of being dropped.
+    """
+    start_dt = _iso(start)
+    end_dt = _iso(end)
     with engine.connect() as conn:
         rows = conn.execute(
             select(BacktestJob).where(
@@ -136,10 +169,14 @@ def backtest_hours_by_tenant(engine, start: str, end: str) -> dict[str, float]:
     hours: dict[str, float] = {}
     for job in rows:
         started, finished = _utc(job.started_at), _utc(job.finished_at)
-        if finished <= started or not (start <= started.isoformat() < end):
+        if finished <= started:
+            continue
+        overlap_start = max(started, start_dt)
+        overlap_end = min(finished, end_dt)
+        if overlap_end <= overlap_start:
             continue
         tenant = job.tenant_id or DEFAULT_TENANT_ID
-        hours[tenant] = hours.get(tenant, 0.0) + (finished - started).total_seconds() / 3600.0
+        hours[tenant] = hours.get(tenant, 0.0) + (overlap_end - overlap_start).total_seconds() / 3600.0
     return hours
 
 
@@ -170,12 +207,31 @@ def meter_usage(engine, start: str, end: str) -> list[Usage]:
 
 
 def rollup(engine, start: str, end: str, *, write_chain: bool = True) -> list[Usage]:
-    """Run the meter and write ``metering_rollups`` (+ chain rows when asked)."""
+    """Run the meter and write ``metering_rollups`` (+ chain rows when asked).
+
+    Idempotent: a re-run for the same ``(tenant_id, period_start, period_end)``
+    updates the existing row instead of inserting a duplicate (the model also
+    carries a unique constraint on that triple).
+    """
     usage = meter_usage(engine, start, end)
     if not usage:
         return usage
     with Session(engine) as session:
         for u in usage:
+            existing = session.execute(
+                select(MeteringRollup).where(
+                    MeteringRollup.tenant_id == u.tenant_id,
+                    MeteringRollup.period_start == start,
+                    MeteringRollup.period_end == end,
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                existing.tier = u.tier
+                existing.api_calls = u.api_calls
+                existing.feed_hours = u.feed_hours
+                existing.backtest_hours = u.backtest_hours
+                existing.chain_events = u.chain_events
+                continue
             session.add(
                 MeteringRollup(
                     tenant_id=u.tenant_id,
@@ -188,10 +244,9 @@ def rollup(engine, start: str, end: str, *, write_chain: bool = True) -> list[Us
                     chain_events=u.chain_events,
                 )
             )
-        if write_chain:
-            from pakhi.ws4.audit_events import AuditSpec, apply_audit
+            if write_chain:
+                from pakhi.ws4.audit_events import AuditSpec, apply_audit
 
-            for u in usage:
                 apply_audit(
                     session,
                     AuditSpec(

@@ -12,9 +12,12 @@ Example:
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -26,6 +29,24 @@ __all__ = ["MeteostatConnector"]
 logger = logging.getLogger(__name__)
 
 METEOSTAT_API_BASE = "https://api.meteostat.net/v2"
+
+# Zero-cost dev mode: when PAKHI_MOCK_DATA is truthy, connectors serve static
+# fixtures instead of hitting the live API (respect free-tier rate limits).
+_MOCK_ENABLED = os.environ.get("PAKHI_MOCK_DATA", "").lower() in ("1", "true", "yes", "on")
+_MOCK_DIR = Path(os.environ.get("PAKHI_MOCK_DATA_DIR", "data/sample/mock"))
+
+
+def _mock_load(endpoint: str) -> Any:
+    """Load a static fixture for ``endpoint`` (e.g. ``stations/nearby`` ->
+    ``stations_nearby.json``) when PAKHI_MOCK_DATA is enabled."""
+    fname = endpoint.replace("/", "_").replace("\\", "_") + ".json"
+    path = _MOCK_DIR / fname
+    if not path.exists():
+        raise FileNotFoundError(
+            f"PAKHI_MOCK_DATA enabled but missing fixture: {path}. "
+            f"Download it once and place it under {_MOCK_DIR}."
+        )
+    return json.loads(path.read_text())
 
 STATION_VARIABLES = [
     "temperature",
@@ -83,6 +104,8 @@ class MeteostatConnector:
 
     def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
         """Make a GET request to the Meteostat API."""
+        if _MOCK_ENABLED:
+            return _mock_load(endpoint)
         url = f"{METEOSTAT_API_BASE}/{endpoint}"
         last_exc: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
@@ -247,8 +270,8 @@ class MeteostatConnector:
                 "windgust_max": obs.get("wpgt"),
                 "pressure_mean": obs.get("pres"),
                 "humidity_mean": obs.get("rhum"),
-                "cloudcover_mean": obs.get("coco"),
-                "visibility_mean": obs.get("tsun"),
+                "cloudcover_mean": obs.get("cldc"),
+                "visibility_mean": obs.get("vsby"),
                 "weather": obs.get("coco"),
             }
             records.append(record)

@@ -298,7 +298,10 @@ class CMEWeatherConnector:
             Series of daily HDD values.
         """
         temp_f = temperature_series.copy()
-        if temp_f.max() < 50:  # Likely Celsius
+        # Auto-detect Celsius. Celsius daily means for HDD contexts rarely
+        # exceed 40 C; a Fahrenheit winter series can legitimately max < 50 F
+        # (e.g. ~10 C), so we only convert when the maximum is below 40.
+        if temp_f.max() < 40:  # Likely Celsius
             temp_f = temp_f * 9.0 / 5.0 + 32.0
         hdd = (base_temp_f - temp_f).clip(lower=0)
         hdd.name = "HDD"
@@ -319,7 +322,10 @@ class CMEWeatherConnector:
             Series of daily CDD values.
         """
         temp_f = temperature_series.copy()
-        if temp_f.max() < 50:  # Likely Celsius
+        # Auto-detect Celsius. Celsius daily means for CDD contexts rarely
+        # exceed 40 C; a Fahrenheit series can legitimately max < 50 F, so we
+        # only convert when the maximum is below 40.
+        if temp_f.max() < 40:  # Likely Celsius
             temp_f = temp_f * 9.0 / 5.0 + 32.0
         cdd = (temp_f - base_temp_f).clip(lower=0)
         cdd.name = "CDD"

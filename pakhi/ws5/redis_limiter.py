@@ -129,6 +129,7 @@ def build_tier_limiters(
     *,
     redis_url: str | None,
     window_seconds: int = 60,
+    workers: int = 1,
 ) -> tuple[dict[str, Any], Any | None]:
     """Build ``{tier: limiter}`` from the contract tier map.
 
@@ -136,7 +137,17 @@ def build_tier_limiters(
     WS-4 single-worker posture, byte-identical). Set -> one ``redis`` client
     shared by every tier's ``RedisTokenBucketLimiter`` (multi-worker safe).
     Returns ``(tier_limiters, redis_client_or_None)``.
+
+    Multi-worker without ``redis_url`` is fail-open on rate limits (each worker
+    counts its own quota), so it is a hard boot error — mirroring the Prometheus
+    multiprocess guard. ``Settings`` already rejects this; this guard is the
+    defense-in-depth check at the limiter boundary.
     """
+    if workers > 1 and not redis_url:
+        raise ValueError(
+            "workers > 1 requires PAKHI_REDIS_URL (shared rate-limit state); "
+            "running multi-worker with in-memory buckets fails open on limits"
+        )
     if not redis_url:
         from pakhi.api.auth import TokenBucketLimiter
 

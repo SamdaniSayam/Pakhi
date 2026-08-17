@@ -42,6 +42,13 @@ _BINARY_EXTS = {
 }
 _SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox"}
 
+# Files that legitimately contain credential *pattern strings* (the scanner's own
+# definitions). They are never real secrets, so they must not trip the scan.
+_SKIP_REL = {
+    "pakhi/ws4/secret_scan.py",
+    "scripts/secret_scan.py",
+}
+
 # name -> compiled regex. Patterns match credential shapes, never test values.
 _PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
     ("private-key", re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |PGP )?PRIVATE KEY")),
@@ -49,7 +56,7 @@ _PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
     ("github-pat", re.compile(r"\bghp_[0-9A-Za-z]{36}\b")),
     ("github-fine-grained-pat", re.compile(r"\bgithub_pat_[0-9A-Za-z_]{30,}\b")),
     ("openai-key", re.compile(r"\bsk-(?:live|test|proj)-[0-9A-Za-z]{16,}\b")),
-    ("stripe-live-key", re.compile(r"\bpk_live_[0-9A-Za-z]{16,}\b")),
+    ("stripe-live-key", re.compile(r"\bsk_live_[0-9A-Za-z]{16,}\b")),
     ("slack-token", re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b")),
     ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("twilio-sid", re.compile(r"\bAC[0-9a-f]{32}\b")),
@@ -95,6 +102,12 @@ def scan_tree(root: Path | None = None) -> list[Finding]:
         if not _is_text(path) or not path.is_file():
             continue
         try:
+            rel = str(path.relative_to(root))
+        except ValueError:
+            rel = path.name
+        if rel in _SKIP_REL:
+            continue
+        try:
             text = path.read_text(errors="replace")
         except OSError:
             continue
@@ -104,8 +117,10 @@ def scan_tree(root: Path | None = None) -> list[Finding]:
                     findings.append(
                         Finding(rule=rule, path=str(path), line=lineno, snippet=line.strip()[:120])
                     )
-    # The repo rule is explicit: never commit a .env.
-    for env_file in (root / ".env", root / ".env.example"):
+        # The repo rule is explicit: never commit a .env. Committed
+        # ``.env.example`` / ``.env.sample`` are intentional, non-secret
+        # templates and must not trip the scan (false positives).
+    for env_file in (root / ".env",):
         if env_file.is_file():
             findings.append(
                 Finding(rule="dotenv", path=str(env_file), line=1, snippet="committed .env")

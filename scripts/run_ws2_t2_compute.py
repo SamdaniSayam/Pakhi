@@ -26,19 +26,10 @@ from pakhi.ws1.pit import benchmark_2sess, load_oj, load_pit
 from pakhi.ws2.compute import ComputeError, compute_cycle
 from pakhi.ws2.db import get_engine, init_db
 from pakhi.ws2.ingest import INGESTED_DIR
+from pakhi.ws2.orchestrate import _episode_id_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("ws2.t2.compute")
-
-
-def _next_episode_id(engine) -> int:
-    from sqlalchemy import func, select
-
-    from pakhi.ws2.db import PaperLedger
-
-    with engine.connect() as conn:
-        mx = conn.execute(select(func.max(PaperLedger.episode_id))).scalar()
-    return int(mx) + 1 if mx is not None else 1
 
 
 def main() -> int:
@@ -84,7 +75,7 @@ def main() -> int:
             sessions=load_oj().index,
             oj=load_oj(),
             rbar=benchmark_2sess(load_pit()),
-            episode_id=_next_episode_id(engine) if engine is not None else None,
+            episode_id=_episode_id_for(engine, record["forecast_cycle_id"]) if engine is not None else None,
             persist=not args.dry_run,
         )
     except (ComputeError, Exception) as exc:

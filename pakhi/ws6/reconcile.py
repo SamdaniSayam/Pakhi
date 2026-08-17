@@ -59,9 +59,13 @@ def drift_percent(chain_count: int, log_count: int) -> float | None:
 
 def classify(chain_count: int, log_count: int) -> str:
     """Contract §4.1 state machine (tolerance / hard threshold)."""
+    if chain_count == 0:
+        # A tenant with zero chain rows but access-log traffic lost audit rows
+        # (the one hole the chain alone cannot see) — treat as EXTREME drift,
+        # not NORMAL, so S1 / block / suspend fire exactly as for the extreme
+        # branch.
+        return EXTREME if log_count > 0 else NORMAL
     pct = drift_percent(chain_count, log_count)
-    if pct is None:
-        return NORMAL
     if pct > hard_threshold_percent():
         return EXTREME
     if pct > tolerance_percent():

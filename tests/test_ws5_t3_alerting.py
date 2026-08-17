@@ -174,6 +174,11 @@ def test_dashboard_references_only_contract_families() -> None:
 
 
 def test_docker_compose_provisions_observability() -> None:
+    # The observability stack (deploy/observability/*) is private (Pakhi-private);
+    # the volume mounts are only validated there. The compose *service* shape is
+    # still public and checked below.
+    if not (ROOT / "deploy" / "observability").exists():
+        pytest.skip("deploy/observability is private (Pakhi-private)")
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
     services = compose["services"]
     assert "prometheus" in services and "grafana" in services

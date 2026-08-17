@@ -1501,6 +1501,13 @@ class TestForecastResult:
 class TestGaussianGPyTorch:
     """Test GPyTorch backend paths of GaussianForecaster."""
 
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        try:
+            import gpytorch  # noqa: F401
+        except ImportError:
+            pytest.skip("gpytorch not installed")
+
     def test_gpytorch_backend_direct(self):
         from pakhi.models.gaussian import GaussianForecaster
 

@@ -24,6 +24,7 @@ _registry = None
 _metrics: dict[str, Any] = {}
 _workers: int = 1
 _initialized = False
+_scrape_provider = None
 
 DEFAULT_HISTOGRAM_BUCKETS = (
     0.005,
@@ -66,7 +67,13 @@ def initialize(workers_count: int = 1) -> Any:
     to point at an existing directory; otherwise the boot fails loudly — never
     a silent per-worker registry (contract §5.8).
     """
-    global _registry, _metrics, _workers, _initialized
+    global _registry, _metrics, _workers, _initialized, _scrape_provider
+
+    # A fresh registry means a fresh app lifecycle: drop any stale scrape
+    # provider from a previous process/test so direct initialize() callers
+    # (and production boots before the lifespan wires the real provider) fall
+    # back to the helper-set gauge values instead of a dead closure.
+    _scrape_provider = None
 
     _workers = max(1, workers_count)
     env = multiprocess_env()
@@ -134,6 +141,10 @@ def _define(registry: Any) -> dict[str, Any]:
     )
 
     # --- Pipeline / cycle (contract families["pipeline"]) ---
+    # These gauges are refreshed from the live store at scrape time (see
+    # render_metrics -> _apply_scrape), so /metrics reflects reality instead of
+    # only whatever /v1/status last wrote. The helper setters still update them
+    # as a fallback when no provider is wired (scripts/CLI/tests).
     m["pakhi_cycle_freshness_seconds"] = pc.Gauge(
         "pakhi_cycle_freshness_seconds",
         "Age of the latest published cycle in seconds.",
@@ -200,7 +211,56 @@ def _define(registry: Any) -> dict[str, Any]:
         "Fraction of the rolling 30-day error budget still remaining.",
         registry=registry,
     )
+    # Boot with a full budget so the PakhiErrorBudgetBurn alert is never a false
+    # positive before any traffic has been observed (contract §3 / T4).
+    m["pakhi_error_budget_remaining_fraction"].set(1.0)
     return m
+
+
+# ---------------------------------------------------------------------------
+# Scrape-time refresh (fix: gauges that /v1/status used to set but Prometheus
+# never scrapes /v1/status — they must be computed live at scrape time).
+# ---------------------------------------------------------------------------
+
+# Maps the provider's returned key -> the gauge name it refreshes. Provider keys
+# it does not return keep their helper-set (or default) value.
+_SCRAPE_REFRESH: tuple[tuple[str, str], ...] = (
+    ("audit_chain_ok", "pakhi_audit_chain_ok"),
+    ("cycle_status", "pakhi_cycle_status"),
+    ("cycle_freshness_seconds", "pakhi_cycle_freshness_seconds"),
+    ("cycle_ingestion_lag_seconds", "pakhi_cycle_ingestion_lag_seconds"),
+    ("cycle_compute_duration_seconds", "pakhi_cycle_compute_duration_seconds"),
+    ("cycle_last_ok_timestamp_seconds", "pakhi_cycle_last_ok_timestamp_seconds"),
+    ("live_bss_vs_baseline", "pakhi_live_bss_vs_baseline"),
+    ("db_pool_in_use", "pakhi_db_pool_in_use"),
+    ("db_pool_max", "pakhi_db_pool_max"),
+)
+
+
+def set_scrape_provider(provider: Any) -> None:
+    """Wire a callable that returns live store/state values at scrape time.
+
+    Invoked inside ``render_metrics`` (i.e. on every Prometheus scrape). It must
+    return a mapping of provider-key -> value for any of the keys in
+    ``_SCRAPE_REFRESH``; missing keys fall back to the helper-set gauge value.
+    Pass ``None`` to clear (used by ``initialize`` so stale closures never leak
+    across boots).
+    """
+    global _scrape_provider
+    _scrape_provider = provider
+
+
+def _apply_scrape() -> None:
+    """Refresh the deep/security gauges from the wired provider (no-op if none)."""
+    if not callable(_scrape_provider):
+        return
+    try:
+        snap = _scrape_provider() or {}
+    except Exception:
+        return
+    for key, name in _SCRAPE_REFRESH:
+        if key in snap and name in _metrics:
+            _metrics[name].set(float(snap[key]))
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +268,9 @@ def _define(registry: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def record_http_request(method: str, path: str, status: int, duration_seconds: float) -> None:
+def record_http_request(
+    method: str, path: str, status: int, duration_seconds: float, fail_closed: bool = False
+) -> None:
     counter = _metrics.get("pakhi_http_requests_total")
     if not counter:
         return
@@ -217,7 +279,10 @@ def record_http_request(method: str, path: str, status: int, duration_seconds: f
     _metrics["pakhi_http_request_duration_seconds"].labels(method=method, path=path).observe(
         duration_seconds
     )
-    if status >= 500:
+    # Only *real* 5xx count toward downtime/SLO. Planned fail-closed 503s
+    # (Redis/DB down in multi-worker mode) are recorded separately in the budget
+    # ledger and must NOT inflate the 5xx total that the SLO-1 alert keys on.
+    if status >= 500 and not (fail_closed and status == 503):
         _metrics["pakhi_http_5xx_total"].labels(method=method, path=path).inc()
 
 
@@ -301,4 +366,9 @@ def render_metrics() -> tuple[str, str]:
     """Body + content-type for GET /metrics (aggregates workers in mp mode)."""
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+    # Refresh the deep/security gauges from the live store at scrape time so
+    # /metrics reflects reality (audit chain, latest cycle, DB pool) rather than
+    # only whatever /v1/status last wrote — Prometheus scrapes /metrics, not
+    # /v1/status.
+    _apply_scrape()
     return generate_latest(get_registry()).decode("utf-8"), CONTENT_TYPE_LATEST

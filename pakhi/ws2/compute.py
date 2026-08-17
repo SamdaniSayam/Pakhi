@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pakhi.ws1.candidate import fires as offline_fires
+from pakhi.ws1.candidate import estimate_thresholds
 from pakhi.ws1.pit import COST, benchmark_2sess, load_oj, load_pit
 from pakhi.ws1.provenance import MARKET, roll_state_table
 from pakhi.ws1.signal import fill_session_of
@@ -68,12 +68,21 @@ def frozen_thresholds(protocol_path: Path | str = PROTOCOL_JSON) -> dict:
     }
 
 
-def offline_verdict(features: dict, thresholds: dict) -> bool:
-    """Offline WS-1 candidate verdict on the same feature row (equivalence oracle)."""
-    row = pd.Series(
-        {"freeze_prob": features["freeze_prob"], "temperature_min": features["temperature_min"]}
+def offline_verdict(features: dict, thresholds: dict | None = None) -> bool:
+    """Offline WS-1 candidate verdict on the same feature row (equivalence oracle).
+
+    Recomputed *independently* from the raw PIT (re-deriving θ_p/θ_t with the WS-1
+    estimator) rather than reusing the stored/frozen threshold dict, so a real
+    divergence in the stored gate is actually caught by :class:`EquivalenceError`
+    in :func:`evaluate_cycle`.  The ``thresholds`` argument is accepted for
+    signature compatibility and intentionally ignored — independence is the point.
+    """
+    pit = load_pit()
+    theta = estimate_thresholds(pit[pit["date"] <= pd.Timestamp(G1_DATE)])
+    return bool(
+        features["freeze_prob"] >= theta["theta_p"]
+        and features["temperature_min"] <= theta["theta_t"]
     )
-    return bool(offline_fires(row, thresholds))
 
 
 def evaluate_cycle(record: dict, thresholds: dict | None = None) -> dict:

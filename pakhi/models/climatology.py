@@ -180,8 +180,8 @@ class ClimatologyModel(BaseModel):
             raise ValueError("Need at least 2 samples to compute climatology.")
 
         if day_of_year is None:
-            # Infer from row count — assume 365-day years.
-            day_of_year = (np.arange(y.shape[0]) % 365) + 1
+            # Infer from row count — approximate leap years to prevent drift
+            day_of_year = (np.arange(y.shape[0]) % 365.2425).astype(int) + 1
         day_of_year = np.asarray(day_of_year, dtype=int)
 
         self._climatology = seasonal_climatology(y, day_of_year=day_of_year)
@@ -222,7 +222,7 @@ class ClimatologyModel(BaseModel):
 
         X = np.asarray(X, dtype=np.float64)
         doy = np.asarray(
-            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365) + 1,
+            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
             dtype=int,
         )
 
@@ -262,7 +262,7 @@ class ClimatologyModel(BaseModel):
         det = result.deterministic
 
         doy = np.asarray(
-            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365) + 1,
+            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
             dtype=int,
         )
 

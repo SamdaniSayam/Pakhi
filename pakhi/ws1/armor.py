@@ -195,9 +195,14 @@ def check_timestamp_armor(pit: pd.DataFrame, sessions: pd.DatetimeIndex) -> dict
                 )
 
     missing_features = [c for c in FEATURE_COLUMNS if c not in pit.columns]
-    contaminated = [
-        c for c in pit.columns if c in FEATURE_COLUMNS and c.startswith(OUTCOME_PREFIXES)
-    ]
+    # Validate the feature WHITELIST itself: no column the candidate actually
+    # consumes may be an outcome-derived column (ojd_*/fwd*). FEATURE_COLUMNS is
+    # exactly what the model reads, so checking it against the outcome prefixes
+    # is the meaningful gate (it would fire if an ojd_/fwd column were ever added
+    # to the whitelist) — replacing the previous vacuous check that scanned pit
+    # columns (a single column cannot be both in FEATURE_COLUMNS and
+    # outcome-prefixed, so it was always empty).
+    contaminated = [c for c in FEATURE_COLUMNS if c.startswith(OUTCOME_PREFIXES)]
     separated = (not missing_features) and (not contaminated)
     if missing_features:
         errors.append(f"feature vector incomplete, missing columns: {missing_features}")
@@ -317,11 +322,16 @@ def check_roll_jump_armor(
         oj = pd.read_parquet(MARKET / "oj_continuous.parquet").reset_index()
         oj["Date"] = pd.to_datetime(oj["Date"])
         oj = oj.set_index("Date").sort_index()
-        oj = oj[["close_adj"]].dropna()
     if calendar is None:
         calendar = pd.read_csv(MARKET / "oj_contract_calendar.csv")
 
-    cont = back_adjust(oj["close_adj"], calendar, roll_rule=ROLL_RULE, n_sigma=n_sigma)
+    # Roll-jump armor must inspect the RAW front-month series (close_raw) so it
+    # can detect roll artifacts; fall back to close_adj only when raw is
+    # unavailable (e.g. synthetic test fixtures that only carry close_adj).
+    raw_col = "close_raw" if "close_raw" in oj.columns else "close_adj"
+    oj_raw = oj[[raw_col]].dropna()
+
+    cont = back_adjust(oj_raw[raw_col], calendar, roll_rule=ROLL_RULE, n_sigma=n_sigma)
     prov = cont.provenance_frame()
 
     modeled = _modeled_weather_sessions(pit, sessions)
@@ -354,7 +364,7 @@ def check_roll_jump_armor(
 
     roll_dates = list(pd.to_datetime(calendar["first_notice_day"]))
     near = roll_jump_assertion(
-        oj["close_adj"], roll_dates, n_sigma=n_sigma, window_days=ROLL_JUMP_WINDOW_DAYS
+        oj_raw[raw_col], roll_dates, n_sigma=n_sigma, window_days=ROLL_JUMP_WINDOW_DAYS
     )
     near_roll_moves: list[dict] = []
     for _, r in near.iterrows():

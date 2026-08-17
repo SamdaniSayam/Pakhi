@@ -194,12 +194,30 @@ def test_file_notifier_appends_jsonl(tmp_path):
 
 
 def test_deploy_scheduler_units_exist():
-    service = REPO / "deploy" / "ws2-orchestrate.service"
-    timer = REPO / "deploy" / "ws2-orchestrate.timer"
-    workflow = REPO / ".github" / "workflows" / "ws2-daily.yml"
-    assert service.exists() and "ExecStart=" in service.read_text()
-    assert timer.exists() and "OnCalendar=" in timer.read_text()
-    assert workflow.exists() and "ws2-daily" in workflow.read_text()
+    # The deploy scheduler units and the ws2-daily workflow are intentionally
+    # private (Pakhi-private). In a public-tree checkout they are absent, so the
+    # test is skipped; in the private repo (deploy/ or private-staging/) it still
+    # validates the shipped scheduler options.
+    service = timer = None
+    for base in (REPO / "deploy", REPO / "private-staging" / "deploy"):
+        cand_s = base / "ws2-orchestrate.service"
+        cand_t = base / "ws2-orchestrate.timer"
+        if cand_s.exists() and cand_t.exists():
+            service, timer = cand_s, cand_t
+            break
+    workflow = None
+    for wf in (
+        REPO / ".github" / "workflows" / "ws2-daily.yml",
+        REPO / "private-staging" / ".github" / "workflows" / "ws2-daily.yml",
+    ):
+        if wf.exists():
+            workflow = wf
+            break
+    if service is None or timer is None or workflow is None:
+        pytest.skip("deploy scheduler units are private (Pakhi-private)")
+    assert "ExecStart=" in service.read_text()
+    assert "OnCalendar=" in timer.read_text()
+    assert "ws2-daily" in workflow.read_text()
 
 
 def test_structured_log_single_sink(tmp_path):

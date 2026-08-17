@@ -996,6 +996,11 @@ class TestNOAATrulyDeep:
         dest.unlink(missing_ok=True)
 
     def test_open_grib_fallback_engine(self):
+        try:
+            import cfgrib
+        except ImportError:
+            pytest.skip("cfgrib not installed")
+        
         from pakhi.src.noaa import GFSConnector
 
         conn = GFSConnector()
@@ -1010,6 +1015,11 @@ class TestNOAATrulyDeep:
             assert mock_open.call_count == 2
 
     def test_open_grib_all_fail(self):
+        try:
+            import cfgrib
+        except ImportError:
+            pytest.skip("cfgrib not installed")
+            
         from pakhi.src.noaa import GFSConnector
 
         conn = GFSConnector()

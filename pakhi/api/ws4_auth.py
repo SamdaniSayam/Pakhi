@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from jwt import InvalidTokenError
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -77,15 +77,23 @@ class Ws4AuthMiddleware(BaseHTTPMiddleware):
 
     def _machine_scope(self, request: Request, key_hash: str, raw: str) -> TenantScope:
         """Machine lane: DB per-tenant key wins if present; otherwise the
-        env/file bootstrap key = admin on the default tenant (§3.1). DB down:
-        fall through to bootstrap so the WS-3 Auth middleware's independent
-        hash validation still decides — DB-only keys fail closed there."""
+        env/file bootstrap key = admin on the default tenant (§3.1).
+
+        Fail-closed: if the key store is unreachable we must NOT silently grant
+        cross-tenant admin on ``pakhi-internal`` — we deny the request so a DB
+        outage can never escalate a machine key to admin (the WS-3 middleware's
+        independent hash validation still governs bootstrap keys when the store
+        is healthy)."""
         engine = getattr(request.app.state, "write_engine", None)
         if engine is not None:
             try:
                 ident = lookup_key(engine, key_hash)
             except Exception:
-                ident = None
+                # Store unreachable: deny rather than degrade to admin.
+                raise HTTPException(
+                    status_code=401,
+                    detail="key authorization store unavailable",
+                )
             if ident is not None:
                 return TenantScope(
                     tenant_id=ident.tenant_id,

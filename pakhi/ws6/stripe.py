@@ -206,52 +206,67 @@ def build_usage_batches(
 def submit_batch(engine, client, batch: dict[str, Any]) -> None:
     """Submit one batch through the transport (idempotent: re-send is a no-op).
 
-    ``client.submit_usage`` is called with the idempotency key and the tenant's
-    Stripe subscription item id. A batch already recorded as submitted is
-    skipped. Failures record ``status="failed"`` so staleness and retry stay
-    honest — including a paid tenant whose batch has no subscription item id
-    (a revenue-bleed alert, never a silent drop).
+    Each billable metric (``api_calls``, ``feed_hours``, ``backtest_hours``) is
+    submitted as its OWN usage record with its own quantity and its own
+    idempotency key — never blended into one number at one price. A metric
+    already recorded as submitted is skipped. Failures record
+    ``status="failed"`` so staleness and retry stay honest — including a paid
+    tenant whose batch has no subscription item id (a revenue-bleed alert, never
+    a silent drop).
     """
-    existing = _batch_status(engine, batch["batch_id"])
-    if existing == "submitted":
-        return
     subscription_item = batch.get("subscription_item")
-    if not subscription_item:
-        status, detail = "failed", "missing stripe subscription_item_id"
-    else:
-        try:
-            client.submit_usage(
-                idempotency_key=batch["batch_id"],
-                tenant_id=batch["tenant_id"],
-                subscription_item=subscription_item,
-                quantity=batch["quantity"],
-                timestamp=int(_utcnow().timestamp()),
-            )
-            status, detail = "submitted", None
-        except Exception as exc:  # transport failure recorded, never thrown away
-            status, detail = "failed", str(exc)
+    metrics = (
+        ("api_calls", "api_calls", 1),
+        ("feed_hours", "feed_hours", 1000),
+        ("backtest_hours", "backtest_hours", 1000),
+    )
+    submitted_any = False
     with Session(engine) as session:
-        if existing is None:
-            session.add(
-                StripeSyncEvent(
-                    batch_id=batch["batch_id"],
-                    tenant_id=batch["tenant_id"],
-                    period=batch["period"],
-                    quantity=batch["quantity"],
-                    status=status,
-                    detail=detail,
-                )
-            )
-        else:
+        for metric, key, scale in metrics:
+            quantity = int((batch.get(key, 0) or 0) * scale)
+            if quantity <= 0:
+                continue
+            sync_id = f"{batch['batch_id']}::{metric}"
+            existing = _batch_status(engine, sync_id)
+            if existing == "submitted":
+                continue
+            if not subscription_item:
+                status, detail = "failed", "missing stripe subscription_item_id"
+            else:
+                try:
+                    client.submit_usage(
+                        idempotency_key=sync_id,
+                        tenant_id=batch["tenant_id"],
+                        subscription_item=subscription_item,
+                        quantity=quantity,
+                        timestamp=int(_utcnow().timestamp()),
+                    )
+                    status, detail = "submitted", None
+                except Exception as exc:  # transport failure recorded, never thrown away
+                    status, detail = "failed", str(exc)
             row = session.execute(
-                select(StripeSyncEvent).where(StripeSyncEvent.batch_id == batch["batch_id"])
-            ).scalar_one()
-            row.status, row.detail = status, detail
+                select(StripeSyncEvent).where(StripeSyncEvent.batch_id == sync_id)
+            ).scalar_one_or_none()
+            if row is None:
+                session.add(
+                    StripeSyncEvent(
+                        batch_id=sync_id,
+                        tenant_id=batch["tenant_id"],
+                        period=batch["period"],
+                        quantity=quantity,
+                        status=status,
+                        detail=detail,
+                    )
+                )
+            else:
+                row.status, row.detail, row.quantity = status, detail, quantity
+            if status == "submitted":
+                submitted_any = True
         session.commit()
-    if status == "submitted":
-        from pakhi.ws6 import metrics
+    if submitted_any:
+        from pakhi.ws6 import metrics as _metrics
 
-        metrics.record_stripe_sync_timestamp(int(_utcnow().timestamp()))
+        _metrics.record_stripe_sync_timestamp(int(_utcnow().timestamp()))
 
 
 def sync_day(engine, client, day: datetime) -> list[dict[str, Any]]:
@@ -286,15 +301,59 @@ def last_sync_timestamp(engine) -> datetime | None:
     return ts
 
 
+def _has_billable_activity(engine) -> bool:
+    """True when some paid tenant actually has usage to submit.
+
+    A day (or a fresh deployment) with no billable activity is *neutral*, not
+    stale — there is simply nothing to sync. Staleness means sync was expected
+    (billable activity exists) but did not happen.
+    """
+    from pakhi.ws2.db import BacktestJob
+    from pakhi.ws4.db import AuditEvent, Tenant
+    from pakhi.ws6 import metering
+
+    with engine.connect() as conn:
+        if conn.execute(
+            select(AuditEvent.id)
+            .join(Tenant, Tenant.id == AuditEvent.tenant_id)
+            .where(
+                AuditEvent.action.notin_(list(metering.INTERNAL_ACTIONS)),
+                Tenant.tier != "free",
+            )
+            .limit(1)
+        ).first():
+            return True
+        if conn.execute(
+            select(AuditEvent.id)
+            .join(Tenant, Tenant.id == AuditEvent.tenant_id)
+            .where(
+                AuditEvent.action.in_(["feed.connect", "feed.disconnect"]),
+                Tenant.tier != "free",
+            )
+            .limit(1)
+        ).first():
+            return True
+        if conn.execute(
+            select(BacktestJob.id)
+            .join(Tenant, Tenant.id == BacktestJob.tenant_id)
+            .where(BacktestJob.status == "done", Tenant.tier != "free")
+            .limit(1)
+        ).first():
+            return True
+    return False
+
+
 def is_sync_stale(engine, *, max_age_hours: int | None = None) -> bool:
     """True when no successful sync within the locked cadence (contract §5).
 
     Also true when a sync failed — a failed submission is not a successful one.
+    A deployment with no billable activity (free-only / quiet days) is *not*
+    stale: there was simply nothing to submit.
     """
     max_age = max_age_hours or billing_contract()["stripe"]["staleness_alert_hours"]
     last = last_sync_timestamp(engine)
     if last is None:
-        return True
+        return _has_billable_activity(engine)
     if last.tzinfo is None:  # SQLite drops tz; treat stored times as UTC
         last = last.replace(tzinfo=timezone.utc)
     return _utcnow() - last > timedelta(hours=max_age)
@@ -304,18 +363,97 @@ class WebhookError(RuntimeError):
     """Signature invalid, payload malformed, or tier mismatch (boot error)."""
 
 
+def _persist_webhook_event(engine, event_id: str, event_type: str, event) -> bool:
+    """Persist the webhook event exactly once. Returns False on a duplicate id."""
+    from sqlalchemy.exc import IntegrityError
+
+    from pakhi.ws6.db import StripeWebhookEvent
+
+    with Session(engine) as session:
+        session.add(StripeWebhookEvent(event_id=event_id, type=event_type, payload=event))
+        try:
+            session.commit()
+        except IntegrityError:
+            return False
+    return True
+
+
+def _webhook_subscription(engine, event: dict, event_id: str, event_type: str) -> dict | None:
+    """Handle ``customer.subscription.updated`` / ``.created``.
+
+    Captures the Stripe subscription item id (mirrored for both events) by
+    scanning **all** line items and preferring the one whose price matches the
+    tenant's tier, falling back to the line item carrying a known price. Returns
+    a "skipped" result dict (no usable metadata) or ``None`` on success (handler
+    should persist + report applied). Raises ``WebhookError`` on a tier mismatch
+    or a missing subscription item id — which must NOT be persisted, so Stripe
+    retries until the tenant's tier resolves.
+    """
+    obj = event.get("data", {}).get("object", {})
+    tenant_id = obj.get("metadata", {}).get("tenant_id", "")
+    if not tenant_id or not obj.get("items", {}).get("data"):
+        return {
+            "event_id": event_id,
+            "type": event_type,
+            "applied": True,
+            "note": "no tenant_id/items metadata; skipped",
+        }
+    items = obj.get("items", {}).get("data", [])
+    try:
+        tier, _ = _tenant_stripe(engine, tenant_id)
+        expected = price_ids().get(tier)
+        match = next(
+            (it for it in items if it.get("price", {}).get("id") == expected), None
+        )
+        if match is None:
+            known = set(price_ids().values())
+            match = next(
+                (it for it in items if it.get("price", {}).get("id") in known), None
+            )
+        if match is None:
+            match = items[0]
+        price_id = match.get("price", {}).get("id", "")
+        subscription_item_id = match.get("id", "")
+        customer_id = obj.get("customer", "")
+        if not price_id:
+            return {
+                "event_id": event_id,
+                "type": event_type,
+                "applied": True,
+                "note": "no price metadata; skipped",
+            }
+        if not subscription_item_id:
+            raise WebhookError(
+                f"{event_type} missing subscription item id (items.data[].id)"
+            )
+        sync_subscription_tier(engine, tenant_id, price_id)
+    except TierMismatchError as exc:
+        raise WebhookError(str(exc)) from exc
+    record_subscription(
+        engine,
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        subscription_item_id=subscription_item_id,
+    )
+    return None
+
+
 def apply_webhook(engine, raw_body: bytes, signature_header: str, secret: str) -> dict[str, Any]:
     """Apply one Stripe webhook event — applied **once** per Stripe event id.
 
     - Invalid/missing signature → ``WebhookError`` (never logged-and-applied).
-    - Event id already handled (or currently being handled) → no-op, deduped.
-    - ``customer.subscription.updated`` → subscription ↔ tier sync; a price
-      that contradicts the tenant's tier is a ``WebhookError`` (boot error),
-      never a silent override.
+    - Event id already handled → no-op, deduped.
+    - The type-specific handler runs **before** the webhook event is persisted.
+      If it raises (tier mismatch, unknown tenant, missing item id) the event is
+      left uncommitted so Stripe's retry re-runs the handler — once the tenant's
+      tier resolves, ``record_subscription`` runs and the item id is captured
+      (otherwise a paid tenant would be billed ``failed`` forever). Only on
+      success is the event marked handled.
+    - ``customer.subscription.updated`` / ``.created`` → subscription ↔ tier
+      sync; a price that contradicts the tenant's tier is a ``WebhookError``
+      (boot error), never a silent override.
     """
     import json
-
-    from sqlalchemy.exc import IntegrityError
 
     from pakhi.ws6.db import StripeWebhookEvent
 
@@ -333,44 +471,20 @@ def apply_webhook(engine, raw_body: bytes, signature_header: str, secret: str) -
     with Session(engine) as session:
         if session.get(StripeWebhookEvent, event_id) is not None:
             return {"event_id": event_id, "type": event_type, "applied": False}
-        session.add(StripeWebhookEvent(event_id=event_id, type=event_type, payload=event))
-        try:
-            session.commit()
-        except IntegrityError:
-            return {"event_id": event_id, "type": event_type, "applied": False}
 
-    if event_type == "customer.subscription.updated":
-        obj = event.get("data", {}).get("object", {})
-        items = obj.get("items", {}).get("data", [{}])[0]
-        price_id = items.get("price", {}).get("id", "")
-        subscription_item_id = items.get("id", "")
-        customer_id = obj.get("customer", "")
-        tenant_id = obj.get("metadata", {}).get("tenant_id", "")
-        if not tenant_id or not price_id:
-            return {
-                "event_id": event_id,
-                "type": event_type,
-                "applied": True,
-                "note": "no tenant_id/price metadata; skipped",
-            }
-        if not subscription_item_id:
-            raise WebhookError(
-                "customer.subscription.updated missing subscription item id (items.data[0].id)"
-            )
-        try:
-            sync_subscription_tier(engine, tenant_id, price_id)
-        except TierMismatchError as exc:
-            raise WebhookError(str(exc)) from exc
-            
-        record_subscription(
-            engine,
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            subscription_item_id=subscription_item_id,
-        )
+    if event_type in ("customer.subscription.updated", "customer.subscription.created"):
+        skip = _webhook_subscription(engine, event, event_id, event_type)
+        if skip is not None:
+            if not _persist_webhook_event(engine, event_id, event_type, event):
+                return {"event_id": event_id, "type": event_type, "applied": False}
+            return skip
     elif event_type == "customer.subscription.deleted":
-        tenant_id = event.get("data", {}).get("object", {}).get("metadata", {}).get("tenant_id", "")
+        tenant_id = (
+            event.get("data", {}).get("object", {}).get("metadata", {}).get("tenant_id", "")
+        )
         if not tenant_id:
+            if not _persist_webhook_event(engine, event_id, event_type, event):
+                return {"event_id": event_id, "type": event_type, "applied": False}
             return {
                 "event_id": event_id,
                 "type": event_type,
@@ -381,4 +495,7 @@ def apply_webhook(engine, raw_body: bytes, signature_header: str, secret: str) -
             clear_subscription(engine, tenant_id=tenant_id)
         except TierMismatchError as exc:
             raise WebhookError(str(exc)) from exc
+
+    if not _persist_webhook_event(engine, event_id, event_type, event):
+        return {"event_id": event_id, "type": event_type, "applied": False}
     return {"event_id": event_id, "type": event_type, "applied": True}

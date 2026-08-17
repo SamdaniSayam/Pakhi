@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from pakhi.ws4.audit_events import AuditSpec, apply_audit
@@ -109,23 +110,30 @@ def start_trial(
             session.commit()
             return {"outcome": "refused", "reason": "one trial per contact/org"}
         expires = now + timedelta(days=days)
-        session.add(
-            TenantTrial(
-                tenant_id=tenant_id,
-                contact_id=contact_id,
-                started_at=now,
-                expires_at=expires,
-                tier_at_trial="free",
+        try:
+            session.add(
+                TenantTrial(
+                    tenant_id=tenant_id,
+                    contact_id=contact_id,
+                    started_at=now,
+                    expires_at=expires,
+                    tier_at_trial="free",
+                )
             )
-        )
-        _audit(
-            session,
-            tenant_id=tenant_id,
-            action="trial.started",
-            payload={"contact_id": contact_id, "days": days, "expires_at": expires.isoformat()},
-            request_id=f"trial-start-{tenant_id}-{int(now.timestamp())}",
-        )
-        session.commit()
+            _audit(
+                session,
+                tenant_id=tenant_id,
+                action="trial.started",
+                payload={"contact_id": contact_id, "days": days, "expires_at": expires.isoformat()},
+                request_id=f"trial-start-{tenant_id}-{int(now.timestamp())}",
+            )
+            session.commit()
+        except IntegrityError:
+            # A concurrent start_trial raced us past the in-session check and
+            # hit the unique (tenant_id, contact_id) constraint first. Treat the
+            # race loser as refused rather than surfacing a raw DB error.
+            session.rollback()
+            return {"outcome": "refused", "reason": "one trial per contact/org"}
     return {
         "outcome": "started",
         "tenant_id": tenant_id,
@@ -217,8 +225,6 @@ def expire_due_trials(engine, *, now: datetime | None = None) -> list[dict]:
     """Downgrade expired trials to ``free`` (never delete); enqueue
     webhook-deliverable notices. Idempotent: a downgraded/converted trial is
     never touched twice. Returns the transitions applied."""
-    from pakhi.ws4.audit_events import AuditSpec
-
     now = _aware(now or _utcnow())
     applied: list[dict] = []
     with Session(engine) as session:
@@ -239,29 +245,11 @@ def expire_due_trials(engine, *, now: datetime | None = None) -> list[dict]:
             if tenant is None:
                 continue
             if tenant.tier == trial.tier_at_trial:
-                # Tier unchanged since the trial started — the contract's
-                # expiry downgrade applies (a no-op if already at the trial
-                # tier, which is free). Only this case ever writes a
-                # billing.tier_downgrade.
-                if tenant.tier != "free":
-                    apply_audit(
-                        session,
-                        AuditSpec(
-                            request_id=f"trial-expire-{tenant_id}-{int(now.timestamp())}",
-                            tenant_id=tenant_id,
-                            actor_id="ws6.trial",
-                            action="billing.tier_downgrade",
-                            resource="tenant",
-                            resource_id=tenant_id,
-                            payload={
-                                "from_tier": tenant.tier,
-                                "to_tier": "free",
-                                "reason": "trial.expired",
-                            },
-                        ),
-                    )
-                    tenant.tier = "free"
-                    tenant.limit_per_min = 30
+                # Tenant is still at the trial tier (always "free"): the
+                # contract's expiry "downgrade to free" is a no-op here and the
+                # trial record is simply closed below. A genuine tier change
+                # only happens via convert/upgrade paths, never on a free trial,
+                # so there is no downgrade to apply in this branch.
                 outcome = "downgraded_to_free"
             else:
                 # Tier CHANGED since the trial started — either a conversion or

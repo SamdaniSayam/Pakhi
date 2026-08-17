@@ -118,11 +118,13 @@ def test_underpowered_when_n_lt_8(engine, tmp_path):
 
 
 def test_pass_at_n_ge_8_positive(engine, tmp_path):
-    # Varied (non-degenerate) positive net-of-benchmark returns.
+    # Varied (non-degenerate) positive net-of-benchmark returns.  Gross varies
+    # with net_of_benchmark so the live recompute (gross - COST - rbar) stays
+    # positive and varied rather than collapsing to a constant zero-variance series.
     nb = [0.0160, 0.0168, 0.0152, 0.0174, 0.0165, 0.0158, 0.0170, 0.0162]
     rows = [
-        _row(i, gross=0.02 + j, net=0.017 + j, net_of_benchmark=net)
-        for i, (j, net) in enumerate(zip([0.0] * 8, nb), start=1)
+        _row(i, gross=net + 0.005, net=net + 0.002, net_of_benchmark=net)
+        for i, net in enumerate(nb, start=1)
     ]
     _insert(engine, rows)
     record = _report(tmp_path, engine, "pass")

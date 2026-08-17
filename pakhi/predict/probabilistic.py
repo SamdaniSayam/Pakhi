@@ -100,7 +100,7 @@ class ProbabilisticPredictor:
             values=np.array([weighted_mean]),
             step_ahead=np.array([1], dtype=np.intp),
             lower=quantiles[:2],
-            upper=quantiles[2:],
+            upper=quantiles[3:],
             metadata={
                 "method": "ensemble",
                 "n_models": n_models,
@@ -157,7 +157,7 @@ class ProbabilisticPredictor:
             values=np.array([mean_pred]),
             step_ahead=np.array([1], dtype=np.intp),
             lower=quantiles[:2],
-            upper=quantiles[2:],
+            upper=quantiles[3:],
             metadata={
                 "method": "mc_dropout",
                 "n_forward": n_forward,

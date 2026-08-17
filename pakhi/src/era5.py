@@ -245,11 +245,16 @@ class ERA5Connector:
         product: str = "reanalysis-era5-single-levels",
     ) -> Path:
         """Download data via CDS API to a local file."""
-        client = self._get_cds_client()
         out_path = self.cache_dir / target
         if out_path.exists():
             logger.debug("Using cached ERA5 file: %s", out_path)
             return out_path
+        if os.environ.get("ERA5_OFFLINE", "").lower() in ("1", "true", "yes", "on"):
+            raise RuntimeError(
+                f"ERA5_OFFLINE is set but the local cache is missing: {out_path}. "
+                "Pre-populate the cache (run once online) or unset ERA5_OFFLINE."
+            )
+        client = self._get_cds_client()
         logger.info("Downloading ERA5 data to %s", out_path)
         client.retrieve(product, request, str(out_path))
         return out_path

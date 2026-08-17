@@ -13,6 +13,8 @@ offer (WS-5 window, untouched by WS-6).
 
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 
 from pakhi.ws4.db import AuditEvent
@@ -38,14 +40,15 @@ def escalation_path(severity: str) -> str | None:
 def classify_severity(text: str, *, default: str = "S3") -> str:
     """Deterministic triage: locked keywords from the twin, priority S1→S2→S3.
 
-    Case-insensitive substring match on the *first keyword hit*; unmatched text
-    falls through to ``S3`` (minor bug / question) — never raises, never
-    classifies upward without a keyword.
+    Case-insensitive word-boundary match on the *first keyword hit*; unmatched
+    text falls through to ``S3`` (minor bug / question) — never raises, never
+    classifies upward without a keyword. Word boundaries stop substrings like
+    "download"/"breakdown"/"slowdown" from triggering the ``down`` S1 keyword.
     """
     lowered = text.lower()
     for severity in _SEVERITY_ORDER:
         for keyword in support_sla()["severities"][severity]["keywords"]:
-            if keyword in lowered:
+            if re.search(rf"\b{re.escape(keyword)}\b", lowered):
                 return severity
     return default
 

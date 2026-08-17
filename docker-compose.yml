@@ -44,6 +44,22 @@ services:
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
 
+  # ── WS-5 Shared Rate-Limit / Budget State (Redis) ─────────────────────
+  redis:
+    image: redis:7
+    container_name: pakhi_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # ── WS-3 Public API (REST + WebSocket) ─────────────────────────────────
   api:
     build: .
@@ -54,10 +70,12 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
     environment:
       - PAKHI_HOME=/home/pakhi
       - PAKHI_DB_READ_URL=postgresql://postgres:postgres@db:5432/pakhi
       - PAKHI_DB_WRITE_URL=postgresql://postgres:postgres@db:5432/pakhi
+      - PAKHI_REDIS_URL=redis://redis:6379/0
       - PAKHI_LOG_LEVEL=INFO
     restart: unless-stopped
     healthcheck:
@@ -101,4 +119,6 @@ volumes:
   pakhi-data:
     driver: local
   timescaledb-data:
+    driver: local
+  redis-data:
     driver: local

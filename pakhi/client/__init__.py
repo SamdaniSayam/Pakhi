@@ -126,9 +126,14 @@ class PakhiClient:
         return self._get("/v1/ledger")
 
     def stream_signals(
-        self, on_signal: Callable[[dict[str, Any]], None], max_messages: int = 1
+        self, on_signal: Callable[[dict[str, Any]], None], max_messages: int = 100
     ) -> None:
-        """Subscribe to WebSocket signal stream (WS /v1/stream/signals)."""
+        """Subscribe to WebSocket signal stream (WS /v1/stream/signals).
+
+        Forwards the API key as the ``X-Pakhi-Key`` header, unwraps the
+        ``signals.batch`` envelope (``{"type": "signals.batch", "data": [...]}``,
+        tolerating ``"signals"`` too) and calls ``on_signal`` once per signal.
+        """
         ws_url = (
             self.base_url.replace("http://", "ws://").replace("https://", "wss://")
             + "/v1/stream/signals"
@@ -143,15 +148,24 @@ class PakhiClient:
                 "The 'websockets' library is required to stream signals using PakhiClient.stream_signals()."
             ) from exc
 
+        headers = {"X-Pakhi-Key": self.api_key} if self.api_key else None
+
         async def _listen():
-            async with websockets.connect(ws_url) as ws:
+            async with websockets.connect(ws_url, extra_headers=headers, timeout=10.0) as ws:
                 count = 0
                 while count < max_messages:
                     msg = await ws.recv()
                     data = _json.loads(msg)
-                    if data.get("type") == "signals.batch":
-                        on_signal(data)
+                    if data.get("type") != "signals.batch":
+                        continue
+                    batch = data.get("data")
+                    if batch is None:
+                        batch = data.get("signals", [])
+                    for sig in batch:
+                        on_signal(sig)
                         count += 1
+                        if count >= max_messages:
+                            break
 
         asyncio.run(_listen())
 

@@ -69,6 +69,7 @@ def freeze_probability(
     if arr.ndim == 1:
         n_members = max(1, len(arr) // max(window_days, 1))
         n_days = max(1, len(arr) // n_members)
+        arr = arr[: n_days * n_members]
         arr = arr.reshape(n_days, n_members)
     # arr shape: (n_days, n_members)
     daily_frac = np.mean(arr <= threshold_celsius, axis=1)

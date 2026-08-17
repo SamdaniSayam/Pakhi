@@ -62,7 +62,7 @@ def test_ws4_twin_upgraded_to_conditional_offer() -> None:
 def test_ws5_twin_offer_is_live_with_window() -> None:
     twin = reliability_contract()
     assert contract_consistent()
-    assert twin["version"] == "1.3"
+    assert twin["version"] == "1.4"
     assert twin["slo"]["sla_offer_active"] is True
     window = twin["slo"]["measurement_window"]
     assert window["days"] == 30
@@ -92,10 +92,15 @@ def test_every_soc2_control_has_machine_evidence_not_a_config() -> None:
     ]
     for control in controls:
         paths = EVIDENCE[control]
-        missing = [p for p in paths if not (ROOT / p).exists()]
+        # Evidence that lives in the private repo (Pakhi-private) — deploy/
+        # artifacts and relocated deploy workflows — is excluded from the
+        # public-repo assertion; it is still machine-checked in Pakhi-private.
+        private = ("deploy/", ".github/workflows/ws5-dr.yml")
+        public_paths = [p for p in paths if not p.startswith(private)]
+        missing = [p for p in public_paths if not (ROOT / p).exists()]
         assert not missing, f"{control}: evidence missing {missing}"
         # A control backed only by generated config is not operational.
-        assert any((ROOT / p).suffix in (".py", ".yml") for p in paths)
+        assert any((ROOT / p).suffix in (".py", ".yml") for p in public_paths)
 
 
 def test_measurement_window_recorded_in_progress_doc() -> None:

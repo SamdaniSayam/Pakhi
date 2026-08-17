@@ -79,7 +79,7 @@ def power_curve(
     ws = np.asarray(wind_speed, dtype=np.float64)
     if hub_height_m != design_hub and hub_height_m > 0:
         ratio = math.log(hub_height_m / z0) / math.log(design_hub / z0)
-        ws = ws * ratio
+        ws = ws / ratio
 
     # Vectorised power curve
     power = np.zeros_like(ws, dtype=np.float64)

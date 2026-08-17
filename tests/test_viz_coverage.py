@@ -17,13 +17,14 @@ def _have(module: str) -> bool:
     """Detect whether a dependency is actually importable in this environment."""
     return importlib.util.find_spec(module) is not None
 
-import matplotlib
+
+import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pytest
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # dashboard.py

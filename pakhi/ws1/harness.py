@@ -291,7 +291,11 @@ def run_harness(
 
             gfs_dir = str(GFS) if GFS.exists() else None
         report["armor"] = run_armor(
-            pit, sessions, manifest=vintage_manifest, oj=oj, calendar=calendar,
+            pit,
+            sessions,
+            manifest=vintage_manifest,
+            oj=oj,
+            calendar=calendar,
             gfs_dir=gfs_dir,
         )
 

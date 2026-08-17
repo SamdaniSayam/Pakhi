@@ -117,9 +117,7 @@ def feed_hours_by_tenant(engine, start: str, end: str) -> dict[str, float]:
     end_dt = _iso(end)
     with engine.connect() as conn:
         rows = conn.execute(
-            select(AuditEvent).where(
-                AuditEvent.action.in_(["feed.connect", "feed.disconnect"])
-            )
+            select(AuditEvent).where(AuditEvent.action.in_(["feed.connect", "feed.disconnect"]))
         ).all()
     sessions: dict[tuple[str, str], list[tuple[str, datetime]]] = {}
     for ev in rows:
@@ -176,7 +174,9 @@ def backtest_hours_by_tenant(engine, start: str, end: str) -> dict[str, float]:
         if overlap_end <= overlap_start:
             continue
         tenant = job.tenant_id or DEFAULT_TENANT_ID
-        hours[tenant] = hours.get(tenant, 0.0) + (overlap_end - overlap_start).total_seconds() / 3600.0
+        hours[tenant] = (
+            hours.get(tenant, 0.0) + (overlap_end - overlap_start).total_seconds() / 3600.0
+        )
     return hours
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import numpy as np
@@ -124,31 +125,23 @@ def pytest_sessionfinish(session, exitstatus):
     import torch
 
     if hasattr(torch._C, "_jit_clear_class_registry"):
-        try:
+        with contextlib.suppress(Exception):
             torch._C._jit_clear_class_registry()
-        except Exception:
-            pass
     for modname in ("torch.onnx", "onnx"):
         if modname in sys.modules:
-            try:
+            with contextlib.suppress(Exception):
                 sys.modules.pop(modname, None)
-            except Exception:
-                pass
 
     def _clean_exit():
         # Flush buffered output, then bypass the segfaulting C++ teardown.
-        try:
+        with contextlib.suppress(Exception):
             import logging
 
             for handler in logging.root.handlers:
                 handler.flush()
-        except Exception:
-            pass
         for stream in (sys.stdout, sys.stderr):
-            try:
+            with contextlib.suppress(Exception):
                 stream.flush()
-            except Exception:
-                pass
         os._exit(int(exitstatus))
 
     atexit.register(_clean_exit)

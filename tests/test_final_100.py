@@ -802,10 +802,10 @@ class TestLSTMCoverage:
     def _setup(self):
         try:
             import torch  # noqa: F401
+
             self.has_torch = True
         except ImportError:
             self.has_torch = False
-
 
     def test_import_torch_error(self):
         with patch.dict(sys.modules, {"torch": None}):

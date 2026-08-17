@@ -68,7 +68,9 @@ class TokenBucketLimiter:
     def _cleanup_expired(self, now: float) -> None:
         """Periodic cleanup of expired tokens to prevent memory leaks."""
         if now - self._last_cleanup > self.window_seconds * 2:
-            expired = [k for k, last in self._last_updated.items() if now - last > self.window_seconds]
+            expired = [
+                k for k, last in self._last_updated.items() if now - last > self.window_seconds
+            ]
             for k in expired:
                 del self._last_updated[k]
                 self._tokens.pop(k, None)

@@ -312,4 +312,10 @@ def audit_list(
         limit=limit,
         offset=offset,
     )
-    return {"audit": rows, "tenant_id": effective, "limit": limit, "offset": offset, "count": len(rows)}
+    return {
+        "audit": rows,
+        "tenant_id": effective,
+        "limit": limit,
+        "offset": offset,
+        "count": len(rows),
+    }

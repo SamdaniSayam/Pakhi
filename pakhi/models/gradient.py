@@ -314,11 +314,7 @@ class GradientForecaster(BaseModel):
             else:
                 self._multioutput_models = []
                 for col in range(n_targets):
-                    y_val_col = (
-                        y_val[:, col]
-                        if (y_val is not None and y_val.ndim > 1)
-                        else y_val
-                    )
+                    y_val_col = y_val[:, col] if (y_val is not None and y_val.ndim > 1) else y_val
                     m = self._fit_single_quantile(X, y[:, col], X_val, y_val_col)
                     self._multioutput_models.append(m)
                 logger.info("Fitted multi-output model with %d targets", n_targets)

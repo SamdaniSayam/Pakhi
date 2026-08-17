@@ -41,9 +41,7 @@ def test_tracked_tree_has_no_secret_shaped_values():
     findings = scan_tree()
     allowlist = ("secret_scan.py", ".json")
     real = [
-        f
-        for f in findings
-        if not (f.path.endswith(allowlist[0]) or f.path.endswith(allowlist[1]))
+        f for f in findings if not (f.path.endswith(allowlist[0]) or f.path.endswith(allowlist[1]))
     ]
     assert real == [], f"secret scan found: {real}"
 

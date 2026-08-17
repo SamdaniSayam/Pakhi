@@ -997,10 +997,10 @@ class TestNOAATrulyDeep:
 
     def test_open_grib_fallback_engine(self):
         try:
-            import cfgrib
+            import cfgrib  # noqa: F401
         except ImportError:
             pytest.skip("cfgrib not installed")
-        
+
         from pakhi.src.noaa import GFSConnector
 
         conn = GFSConnector()
@@ -1016,10 +1016,10 @@ class TestNOAATrulyDeep:
 
     def test_open_grib_all_fail(self):
         try:
-            import cfgrib
+            import cfgrib  # noqa: F401
         except ImportError:
             pytest.skip("cfgrib not installed")
-            
+
         from pakhi.src.noaa import GFSConnector
 
         conn = GFSConnector()

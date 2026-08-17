@@ -48,6 +48,7 @@ def _mock_load(endpoint: str) -> Any:
         )
     return json.loads(path.read_text())
 
+
 STATION_VARIABLES = [
     "temperature",
     "dewpoint",

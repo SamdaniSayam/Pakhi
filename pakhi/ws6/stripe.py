@@ -402,14 +402,10 @@ def _webhook_subscription(engine, event: dict, event_id: str, event_type: str) -
     try:
         tier, _ = _tenant_stripe(engine, tenant_id)
         expected = price_ids().get(tier)
-        match = next(
-            (it for it in items if it.get("price", {}).get("id") == expected), None
-        )
+        match = next((it for it in items if it.get("price", {}).get("id") == expected), None)
         if match is None:
             known = set(price_ids().values())
-            match = next(
-                (it for it in items if it.get("price", {}).get("id") in known), None
-            )
+            match = next((it for it in items if it.get("price", {}).get("id") in known), None)
         if match is None:
             match = items[0]
         price_id = match.get("price", {}).get("id", "")
@@ -423,9 +419,7 @@ def _webhook_subscription(engine, event: dict, event_id: str, event_type: str) -
                 "note": "no price metadata; skipped",
             }
         if not subscription_item_id:
-            raise WebhookError(
-                f"{event_type} missing subscription item id (items.data[].id)"
-            )
+            raise WebhookError(f"{event_type} missing subscription item id (items.data[].id)")
         sync_subscription_tier(engine, tenant_id, price_id)
     except TierMismatchError as exc:
         raise WebhookError(str(exc)) from exc
@@ -479,9 +473,7 @@ def apply_webhook(engine, raw_body: bytes, signature_header: str, secret: str) -
                 return {"event_id": event_id, "type": event_type, "applied": False}
             return skip
     elif event_type == "customer.subscription.deleted":
-        tenant_id = (
-            event.get("data", {}).get("object", {}).get("metadata", {}).get("tenant_id", "")
-        )
+        tenant_id = event.get("data", {}).get("object", {}).get("metadata", {}).get("tenant_id", "")
         if not tenant_id:
             if not _persist_webhook_event(engine, event_id, event_type, event):
                 return {"event_id": event_id, "type": event_type, "applied": False}

@@ -222,7 +222,9 @@ class ClimatologyModel(BaseModel):
 
         X = np.asarray(X, dtype=np.float64)
         doy = np.asarray(
-            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
+            day_of_year
+            if day_of_year is not None
+            else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
             dtype=int,
         )
 
@@ -262,7 +264,9 @@ class ClimatologyModel(BaseModel):
         det = result.deterministic
 
         doy = np.asarray(
-            day_of_year if day_of_year is not None else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
+            day_of_year
+            if day_of_year is not None
+            else (np.arange(X.shape[0]) % 365.2425).astype(int) + 1,
             dtype=int,
         )
 

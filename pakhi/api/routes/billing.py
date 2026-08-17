@@ -59,6 +59,4 @@ async def stripe_webhook(request: Request) -> Response:
             media_type="application/json",
         )
     logger.info("Applied Stripe webhook: %s", result)
-    return Response(
-        content='{"status":"ok"}', status_code=200, media_type="application/json"
-    )
+    return Response(content='{"status":"ok"}', status_code=200, media_type="application/json")

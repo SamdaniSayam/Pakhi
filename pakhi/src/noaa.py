@@ -330,9 +330,7 @@ class GFSConnector:
             if lon0 <= lon1:
                 ds = ds.sel(longitude=slice(lon0, lon1))
             else:
-                ds = ds.sel(
-                    longitude=((ds["longitude"] >= lon0) | (ds["longitude"] <= lon1))
-                )
+                ds = ds.sel(longitude=((ds["longitude"] >= lon0) | (ds["longitude"] <= lon1)))
         if "latitude" in ds.coords:
             lat = ds.latitude.values
             descending = len(lat) > 1 and lat[0] > lat[-1]

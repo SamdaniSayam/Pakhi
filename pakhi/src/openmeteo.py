@@ -47,6 +47,7 @@ def _mock_load_url(url: str) -> Any:
         )
     return json.loads(path.read_text())
 
+
 FORECAST_VARIABLES = [
     "temperature_2m",
     "relative_humidity_2m",

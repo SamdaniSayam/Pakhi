@@ -148,9 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         now = _dt.datetime.now(_dt.timezone.utc)
                         fresh = (now - pub).total_seconds()
                         result["cycle_freshness_seconds"] = float(fresh)
-                        result["cycle_status"] = (
-                            1.0 if fresh <= cycle_period_seconds() else 0.0
-                        )
+                        result["cycle_status"] = 1.0 if fresh <= cycle_period_seconds() else 0.0
                         result["cycle_last_ok_timestamp_seconds"] = float(pub.timestamp())
                 except Exception:
                     pass

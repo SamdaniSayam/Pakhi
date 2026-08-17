@@ -154,7 +154,7 @@ def test_ensemble_predict_fail():
 # 8. gradient.py
 def test_gradient_early_stopping():
     try:
-        import lightgbm
+        import lightgbm  # noqa: F401
     except ImportError:
         pytest.skip("lightgbm not installed")
 

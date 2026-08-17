@@ -110,9 +110,11 @@ def migrate(engine) -> None:
         if "tenant_id" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE backtest_jobs ADD COLUMN tenant_id VARCHAR"))
-                
+
     if insp.has_table("tenants"):
         cols = {c["name"] for c in insp.get_columns("tenants")}
         if "stripe_subscription_item_id" not in cols:
             with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE tenants ADD COLUMN stripe_subscription_item_id VARCHAR"))
+                conn.execute(
+                    text("ALTER TABLE tenants ADD COLUMN stripe_subscription_item_id VARCHAR")
+                )

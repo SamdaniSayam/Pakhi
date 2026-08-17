@@ -33,6 +33,35 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pakhi
+          POSTGRES_PASSWORD: pakhi
+          POSTGRES_DB: pakhi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pakhi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Brings the WS-4/WS-5 integration tests into the main matrix (they were
+      # previously only exercised by the private repo's ws4-security.yml). psycopg
+      # v3 (not the `postgres` extra's psycopg2-binary, which segfaults at exit).
+      WS4_TEST_DB_URL: postgresql+psycopg://pakhi:pakhi@localhost:5432/pakhi_test
+      REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,8 +74,10 @@ jobs:
       - name: Install pakhi
         # The WS-3 API test suite needs the `api` extra (fastapi/httpx/websockets)
         # and the `obs` extra (prometheus_client, used by pakhi.ws5.metrics).
-        # Both are intentionally not in `[all]`; install them for the test job.
-        run: pip install -e ".[all,api,obs]"
+        # The `redis` extra + psycopg v3 back the WS-4/WS-5 integration tests
+        # (test_ws4_t5_ci, test_ws5_t1_redis) so they run here, not only in the
+        # private repo's ws4-security.yml.
+        run: pip install -e ".[all,api,redis,obs]" "psycopg[binary]>=3.1"
       - name: Run tests
         run: pytest tests/ -v --tb=short --cov=pakhi --cov-report=xml
       - name: Secrets scan

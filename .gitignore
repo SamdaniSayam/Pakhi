@@ -117,3 +117,6 @@ uv_install.log
 
 # Local staging of private files (never committed)
 private-staging
+
+# Track the safe placeholder template (real .env stays ignored)
+!.env.example

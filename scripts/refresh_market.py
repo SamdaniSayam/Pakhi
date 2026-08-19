@@ -12,6 +12,7 @@ the live daily wrapper (``pakhi_orchestrator_run.sh``) — that swap happens in
 Phase 1B once the continuous-series rebuild covers all instruments. Running it
 manually is safe and idempotent (overwrites the regenerable raw parquets).
 """
+
 from __future__ import annotations
 
 import sys
@@ -27,8 +28,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pakhi.src.yahoo import YahooFuturesConnector
-from pakhi.ws1.instruments import INSTRUMENTS, YAHOO_TICKERS
+from pakhi.src.yahoo import YahooFuturesConnector  # noqa: E402
+from pakhi.ws1.instruments import INSTRUMENTS, YAHOO_TICKERS  # noqa: E402
 
 MARKET = Path("/home/megalith/Desktop/pakhi/data/market")
 
@@ -62,8 +63,7 @@ def main() -> None:
         out = MARKET / f"{_slug(ticker)}_daily_raw.parquet"
         df.to_parquet(out, index=False)
         print(
-            f"wrote {out}: {len(df)} rows, "
-            f"{df['Date'].min().date()} -> {df['Date'].max().date()}"
+            f"wrote {out}: {len(df)} rows, {df['Date'].min().date()} -> {df['Date'].max().date()}"
         )
 
     for key, inst in INSTRUMENTS.items():

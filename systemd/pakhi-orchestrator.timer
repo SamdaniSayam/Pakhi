@@ -1,0 +1,16 @@
+[Unit]
+Description=Daily trigger for Pakhi WS-2 paper-trading orchestrator
+Documentation=https://github.com/anomalyco/pakhi
+After=network-online.target
+
+[Timer]
+# Fire daily after the US cash market close so the same-day OJ close is
+# available (ICE OJ futures close 14:00 ET = 18:00 UTC; NYSE 20:00 UTC).
+# The wrapper refreshes the market feed *before* running the orchestrator,
+# so this single timer covers "after the market data refresh".
+OnCalendar=*-*-* 21:00:00 UTC
+Persistent=true
+Unit=pakhi-orchestrator.service
+
+[Install]
+WantedBy=timers.target

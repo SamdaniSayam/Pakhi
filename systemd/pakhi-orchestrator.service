@@ -1,0 +1,22 @@
+[Unit]
+Description=Pakhi WS-2 Paper Trading Orchestrator (daily, after market refresh)
+Documentation=https://github.com/anomalyco/pakhi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=megalith
+Group=megalith
+WorkingDirectory=/home/megalith/Desktop/pakhi
+# The wrapper refreshes the OJ market feed, rebuilds the continuous series,
+# then runs the WS-2 T3 orchestrator against Postgres. journalctl captures
+# all stdout/stderr natively — no manual log piping required.
+ExecStart=/home/megalith/Desktop/pakhi/scripts/pakhi_orchestrator_run.sh
+StandardOutput=journal
+StandardError=journal
+# A failure must be visible: `systemctl status pakhi-orchestrator` + journalctl.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

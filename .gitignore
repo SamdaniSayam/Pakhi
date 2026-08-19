@@ -55,7 +55,7 @@ data/sample/*.nc
 data/sample/*.zarr
 data/gfs/*.parquet
 data/gfs/cycle_inventory.csv
-data/market/*_daily.parquet
+data/market/*.parquet
 data/ws0/*.parquet
 data/ws0/*.csv
 data/ws0/manifest.json
@@ -120,3 +120,6 @@ private-staging
 
 # Track the safe placeholder template (real .env stays ignored)
 !.env.example
+
+# Secrets / local connection strings (never commit)
+dburl.txt

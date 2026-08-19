@@ -181,9 +181,7 @@ def _rules_body() -> str:
             "path": "backup_age.alert_threshold_hours",
             "value": f"{backup_age_alert_threshold_hours()}h",
             "severity": "critical",
-            "summary": (
-                "No successful backup in the last 26h; RPO assurance at risk."
-            ),
+            "summary": ("No successful backup in the last 26h; RPO assurance at risk."),
         },
         {
             "alert": "PakhiStripeSyncStale",
@@ -195,9 +193,7 @@ def _rules_body() -> str:
             "path": "stripe_sync_staleness.alert_threshold_seconds",
             "value": f"{stripe_sync_staleness_alert_threshold_seconds()}s",
             "severity": "warning",
-            "summary": (
-                "Stripe billing sync has not run in 2h; metering may drift."
-            ),
+            "summary": ("Stripe billing sync has not run in 2h; metering may drift."),
         },
     ]
 

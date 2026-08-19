@@ -18,15 +18,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pakhi.trading.instruments import get_instrument
-
 __all__ = [
-    "SignalClass",
-    "EvaluationInstrument",
-    "SignalClassDef",
     "INSTRUMENTS",
     "SIGNAL_CLASSES",
     "YAHOO_TICKERS",
+    "EvaluationInstrument",
+    "SignalClass",
+    "SignalClassDef",
     "get_instrument_def",
     "get_signal_class",
     "price_source_for",

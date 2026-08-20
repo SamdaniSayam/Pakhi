@@ -1,0 +1,169 @@
+{
+  "version": "2.0",
+  "status": "DRAFT",
+  "drafted_utc": "2026-08-19T00:00:00+00:00",
+  "locked_utc": null,
+  "gate": "G1",
+  "source_doc": "docs/WS1_EVALUATION_CONTRACT_V2.md",
+  "code_registry": "pakhi/ws1/instruments.py",
+  "extends": "v1.1 (OJ=ColdGrip only; remains authoritative for the single-instrument G1)",
+  "purpose": "Multi-instrument expansion (S1) to reach a defensible N by pooling events across instruments. Bottleneck is N, not model sophistication.",
+  "pooling": {
+    "method": "equal-weight per event (not per-instrument)",
+    "rationale": "prevents any single instrument from dominating the pooled Sharpe estimate"
+  },
+  "instruments": [
+    {
+      "name": "OJ",
+      "ticker": "OJ=F",
+      "signal_class": "ColdGrip",
+      "weather_var": "freeze_prob",
+      "region": "Florida citrus belt",
+      "price_source": "yahoo",
+      "weather_source": "noaa-gfs-bdp-pds",
+      "trading_key": "OJ_FUTURES",
+      "baseline": true
+    },
+    {
+      "name": "Corn",
+      "ticker": "ZC=F",
+      "signal_class": "DroughtGrip",
+      "weather_var": "spi_30d",
+      "region": "US Corn Belt [-104,36,-80,48]",
+      "price_source": "yahoo",
+      "weather_source": "noaa-gfs-bdp-pds",
+      "trading_key": "ZC_FUTURES"
+    },
+    {
+      "name": "NatGas",
+      "ticker": "NG=F",
+      "signal_class": "StormGrip",
+      "weather_var": "hurricane_prob",
+      "region": "Gulf of Mexico",
+      "price_source": "yahoo",
+      "weather_source": "noaa-gfs-bdp-pds",
+      "trading_key": "NG_FUTURES"
+    },
+    {
+      "name": "Wheat",
+      "ticker": "ZW=F",
+      "signal_class": "DroughtGrip",
+      "weather_var": "spi_30d",
+      "region": "Great Plains wheat [-104,32,-96,48]",
+      "price_source": "yahoo",
+      "weather_source": "noaa-gfs-bdp-pds",
+      "trading_key": "ZW_FUTURES"
+    },
+    {
+      "name": "ERCOT",
+      "ticker": "ERCOT_POWER",
+      "signal_class": "HeatGrip",
+      "weather_var": "cdd_3day",
+      "region": "Texas (ERCOT)",
+      "price_source": "ercot_settlement",
+      "weather_source": "noaa-gfs-bdp-pds",
+      "trading_key": "ERCOT_FUTURES"
+    }
+  ],
+  "features_source": "noaa-gfs-bdp-pds archive (as-published, no lookahead). ERA5 reanalysis permitted ONLY for target validation, never as an input feature.",
+  "candidates": {
+    "ColdGrip": "per v1.1 (unchanged)",
+    "DroughtGrip": {
+      "fire": "spi_30d <= theta_spi AND precip_anomaly <= theta_precip",
+      "theta_spi": "median SPI over train-window drought rows (deterministic, per-fold)",
+      "theta_precip": "fixed 0.0 (anomaly <= 0 means dry)"
+    },
+    "StormGrip": {
+      "fire": "hurricane_prob >= theta_h AND gulf_proximity_km <= 320",
+      "theta_h": "median of train-fold hurricane_prob distribution (empirical, per-fold, not hardcoded)",
+      "gulf_proximity_km": "fixed geographic constant (320 km)"
+    },
+    "HeatGrip": {
+      "fire": "cdd_3day >= theta_cdd AND temperature_max_C >= 38",
+      "theta_cdd": "median of train-fold cdd_3day distribution (empirical, per-fold, not hardcoded)",
+      "temperature_max_C": "fixed physical constant (38 C)"
+    }
+  },
+  "per_instrument": {
+    "OJ": { "train_seed_end": "2021-10-31", "oos": "2022-11-01..2026-03-31", "n_min": 8, "episode_ceiling": 13 },
+    "Corn": { "train_seed_end": "2015-12-31", "oos": "2016-01-01..2026-03-31", "n_min": "set at lock" },
+    "NatGas": { "train_seed_end": "2015-12-31", "oos": "2016-01-01..2026-03-31", "n_min": "set at lock" },
+    "Wheat": { "train_seed_end": "2015-12-31", "oos": "2016-01-01..2026-03-31", "n_min": "set at lock" },
+    "ERCOT": { "train_seed_end": "2015-12-31", "oos": "2016-01-01..2026-03-31", "n_min": "set at lock" }
+  },
+  "sample_size": {
+    "pooled_n_min_full": 30,
+    "pooled_n_min_interim": 8,
+    "under_powered_if": "N_pooled < 30 -> continue live paper-trading accumulation"
+  },
+  "trade": {
+    "entry": "first trading-session close ON/AFTER cycle date",
+    "hold_sessions": 2,
+    "costs_bps_round_trip": 30,
+    "net": "gross - 0.0030"
+  },
+  "metric": {
+    "type": "event-based trade-level net-of-benchmark Sharpe, pooled across ALL instruments and folds, equal-weight per event",
+    "annualization": "mean/std * sqrt(N / pooled_span_years)",
+    "bootstrap": { "resamples": 10000, "method": "percentile", "seed": 42 }
+  },
+  "decision_rules": {
+    "PASS": "N_pooled>=30 and net-of-benchmark Sharpe>1.0 and bootstrap CI lower>0",
+    "FAIL_PIVOT": "N_pooled>=30 and (CI includes 0 or mean net<=0)",
+    "UNDER_POWERED": "N_pooled<30",
+    "ZERO_TRADES": "architecture success -> documented pivot",
+    "KILL_PIVOT": "N_pooled>=30 and net-of-benchmark Sharpe<0 -> confirmed null -> cat-bond/reinsurance pivot"
+  },
+  "hard_gates": {
+    "timestamp_armor": "feature references post-cutoff data -> invalid",
+    "vintage_armor": "feature not from noaa-gfs-bdp-pds -> invalid",
+    "roll_jump_armor": "roll-date move >5x daily sigma without modeled weather event -> halt",
+    "cross_instrument_leakage": "no instrument may use another instrument's market returns"
+  },
+  "anti_gaming": [
+    "one-shot evaluation",
+    "no OOS feedback into tuning",
+    "no full-window parameter search",
+    "pre-registration committed to git"
+  ],
+  "phase_plan": {
+    "1A": {
+      "status": "IN_PROGRESS",
+      "deliverables": [
+        "Contract V2 structure drafted (this document + pakhi/ws1/instruments.py)",
+        "Instrument & signal-class registry (empirical-median mechanisms, no hardcoded thresholds)",
+        "Market-data downloader scripts/refresh_market.py (Yahoo OJ/Corn/NG/Wheat; ERCOT pending ercot_settlement feed)"
+      ]
+    },
+    "1B": {
+      "status": "PENDING",
+      "deliverables": [
+        "DroughtGrip candidate signal + empirical-median theta_spi (Corn/Wheat)",
+        "Continuous-series rebuild across all Yahoo instruments",
+        "ERCOT price feed connector (ercot_settlement)"
+      ]
+    },
+    "1C": {
+      "status": "PENDING",
+      "deliverables": [
+        "StormGrip (NatGas) candidate + empirical-median theta_h",
+        "HeatGrip (ERCOT) candidate + empirical-median theta_cdd"
+      ]
+    },
+    "1D": {
+      "status": "PENDING",
+      "deliverables": [
+        "Pooled event-level harness across instruments AND folds",
+        "Lookahead-armor verification of every feature",
+        "N_pooled >= 30 check; under-powered -> continue paper accumulation"
+      ]
+    },
+    "LOCK": {
+      "status": "PENDING",
+      "gate": "CEO + CTO hash after 1A-1D verified clean of lookahead on historical folds",
+      "trigger": "flip status DRAFT -> LOCKED and set payload_sha256"
+    }
+  },
+  "change_control": "v2.0 draft -> lock (CEO + CTO hash). Amendments require v2.(n+1).",
+  "payload_sha256": "UNLOCKED_DRAFT"
+}

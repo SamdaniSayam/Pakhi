@@ -75,7 +75,9 @@ def main() -> int:
             sessions=load_oj().index,
             oj=load_oj(),
             rbar=benchmark_2sess(load_pit()),
-            episode_id=_episode_id_for(engine, record["forecast_cycle_id"]) if engine is not None else None,
+            episode_id=_episode_id_for(engine, record["forecast_cycle_id"])
+            if engine is not None
+            else None,
             persist=not args.dry_run,
         )
     except (ComputeError, Exception) as exc:

@@ -120,3 +120,4 @@ private-staging
 
 # Track the safe placeholder template (real .env stays ignored)
 !.env.example
+dburl.txt

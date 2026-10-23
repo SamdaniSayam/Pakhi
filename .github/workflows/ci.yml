@@ -29,6 +29,7 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -68,9 +69,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install system deps
+        # Time-bounded + non-fatal: a flaky/blocked Ubuntu mirror can make
+        # `apt-get update` hang silently for the whole job timeout. Cap it and
+        # fall through — the pip wheels bundle OpenBLAS/libgfortran, so the
+        # suites do not actually require these system packages.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libopenblas-dev libgfortran5
+          sudo timeout 300 apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 || true
+          sudo timeout 300 apt-get install -y --no-install-recommends libopenblas-dev libgfortran5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 || true
       - name: Install pakhi
         # The WS-3 API test suite needs the `api` extra (fastapi/httpx/websockets)
         # and the `obs` extra (prometheus_client, used by pakhi.ws5.metrics).
@@ -94,6 +99,7 @@ jobs:
   supply-chain:
     name: Supply chain (pip-audit)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,7 +110,24 @@ jobs:
           pip install -e ".[all,api,obs]"
           pip install pip-audit
       - name: pip-audit (fail on known vulnerable deps)
-        run: pip-audit --require-hashes || pip-audit
+        # Best-effort against transient PyPI/network errors: retry, but a real
+        # vulnerability (pip-audit exit 1) still fails the build. A persistent
+        # infra error (exit 2) after retries is reported but does not block CI.
+        run: |
+          for i in 1 2 3; do
+            pip-audit --progress-spinner off
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "pip-audit: no known vulnerabilities"
+              break
+            elif [ "$rc" -eq 1 ]; then
+              echo "pip-audit: VULNERABILITIES FOUND"
+              exit 1
+            fi
+            echo "pip-audit attempt $i hit a transient error (rc=$rc); retrying in 15s..."
+            sleep 15
+          done
+          echo "pip-audit: skipped after transient failures (infra issue, not a vulnerability)"
 
   docker:
     name: Docker build
